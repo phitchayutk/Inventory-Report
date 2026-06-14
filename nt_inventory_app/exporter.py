@@ -203,3 +203,127 @@ def export_to_bytes(
     write_wan_link(ws3, wan_link_rows, report_date)
 
     return _wb_to_bytes(wb)
+
+
+# ── Pivot ─────────────────────────────────────────────────────────────────────
+PIVOT_COLS = [
+    ('Hostname',  24),
+    ('ProductID', 24),
+    ('SiteName',  22),
+    ('Site',      14),
+]
+
+
+def write_pivot(ws, rows: list[dict], report_date: str):
+    _title(ws, f'NT Pivot ( ข้อมูล ณ วันที่ {report_date})', len(PIVOT_COLS))
+    for ci, (hdr, w) in enumerate(PIVOT_COLS, 1):
+        _hdr(ws.cell(row=2, column=ci), hdr)
+        ws.column_dimensions[get_column_letter(ci)].width = w
+    ws.row_dimensions[2].height = 16
+    for ri, row in enumerate(rows, 3):
+        ws.row_dimensions[ri].height = 15
+        vals = [row.get('Hostname',''), row.get('ProductID',''),
+                row.get('SiteName',''), row.get('Site','')]
+        for ci, v in enumerate(vals, 1):
+            _data(ws.cell(row=ri, column=ci), v)
+    ws.freeze_panes = 'A3'
+    if rows:
+        ws.auto_filter.ref = f'A2:{get_column_letter(len(PIVOT_COLS))}{len(rows)+2}'
+
+
+# ── New Device / Off Device ───────────────────────────────────────────────────
+_RED_HEADER_FILL   = PatternFill('solid', fgColor='C00000')   # เข้ม (Off)
+_PINK_HEADER_FILL  = PatternFill('solid', fgColor='FF0000')   # สด (New)
+_PINK_ROW_FILL     = PatternFill('solid', fgColor='FFE0E0')
+_DARKRED_ROW_FILL  = PatternFill('solid', fgColor='FFD0D0')
+
+NEWOFF_COLS = [
+    ('Network',    12), ('Hostname',  22), ('IP Address', 18),
+    ('Platform',   12), ('Type',      14), ('ProductID',  24),
+    ('CollectedSN',20), ('Site Name', 22), ('Zone',       10),
+    ('SW Version', 14),
+]
+
+
+def _write_newoff(ws, rows: list[dict], title_text: str,
+                  header_fill: PatternFill, row_fill: PatternFill):
+    ws['A1'] = title_text
+    ws['A1'].font      = TITLE_FONT
+    ws['A1'].alignment = LEFT_ALIGN
+    ws.merge_cells(f'A1:{get_column_letter(len(NEWOFF_COLS))}1')
+    ws.row_dimensions[1].height = 20
+
+    for ci, (hdr, w) in enumerate(NEWOFF_COLS, 1):
+        cell = ws.cell(row=2, column=ci)
+        _hdr(cell, hdr, fill=header_fill)
+        ws.column_dimensions[get_column_letter(ci)].width = w
+    ws.row_dimensions[2].height = 16
+
+    for ri, row in enumerate(rows, 3):
+        ws.row_dimensions[ri].height = 15
+        vals = [
+            row.get('Network','MPLS LPE'), row.get('Hostname',''),
+            row.get('IP Address',''),      row.get('Platform',''),
+            row.get('Type',''),            row.get('ProductID',''),
+            row.get('CollectedSN',''),     row.get('Site Name',''),
+            row.get('Zone',''),            row.get('SW Version',''),
+        ]
+        for ci, v in enumerate(vals, 1):
+            cell = ws.cell(row=ri, column=ci)
+            _data(cell, v)
+            cell.fill = row_fill
+
+    ws.freeze_panes = 'A3'
+    if rows:
+        ws.auto_filter.ref = f'A2:{get_column_letter(len(NEWOFF_COLS))}{len(rows)+2}'
+
+
+def write_new_device(ws, rows: list[dict], report_date: str):
+    _write_newoff(ws, rows,
+                  title_text=f'อุปกรณ์ขึ้นใหม่ประจำเดือน {report_date}',
+                  header_fill=_PINK_HEADER_FILL,
+                  row_fill=_PINK_ROW_FILL)
+
+
+def write_off_device(ws, rows: list[dict], report_date: str):
+    _write_newoff(ws, rows,
+                  title_text=f'อุปกรณ์เลิกใช้งานประจำเดือน {report_date}',
+                  header_fill=_RED_HEADER_FILL,
+                  row_fill=_DARKRED_ROW_FILL)
+
+
+# ── Updated full export ────────────────────────────────────────────────────────
+
+def export_to_bytes_full(
+    inventory_rows:   list[dict],
+    port_status_rows: list[dict],
+    wan_link_rows:    list[dict],
+    pivot_rows:       list[dict],
+    new_device_rows:  list[dict],
+    off_device_rows:  list[dict],
+    report_date:      str | None = None,
+) -> bytes:
+    if not report_date:
+        report_date = datetime.now().strftime('%d-%m-%Y')
+
+    wb = Workbook()
+
+    ws1 = wb.active; ws1.title = 'NT Overall'
+    write_nt_overall(ws1, inventory_rows, report_date)
+
+    ws2 = wb.create_sheet('Port Status')
+    write_port_status(ws2, port_status_rows, report_date)
+
+    ws3 = wb.create_sheet('WAN Link')
+    write_wan_link(ws3, wan_link_rows, report_date)
+
+    ws4 = wb.create_sheet('Pivot')
+    write_pivot(ws4, pivot_rows, report_date)
+
+    ws5 = wb.create_sheet('New Device')
+    write_new_device(ws5, new_device_rows, report_date)
+
+    ws6 = wb.create_sheet('Off Device')
+    write_off_device(ws6, off_device_rows, report_date)
+
+    return _wb_to_bytes(wb)
