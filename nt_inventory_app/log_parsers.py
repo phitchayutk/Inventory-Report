@@ -312,6 +312,9 @@ _PHYSICAL_INTF_RE = re.compile(
 
 def _speed_bucket(intf: str) -> str | None:
     """Return speed bucket for physical interfaces only. Returns None for non-physical."""
+    # Skip subinterfaces (e.g. TenGigE0/0/0/0.100)
+    if '.' in intf:
+        return None
     # Skip non-physical: pw, Lo, BD, Vi, Mg, Null, Tunnel, Bundle, BVI, BDI etc.
     if not _PHYSICAL_INTF_RE.match(intf):
         return None
