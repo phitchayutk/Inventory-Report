@@ -8,6 +8,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from parsers import parse_cdp_neighbors
 from archive_utils import extract_logs
 from zone_db_manager import render_zone_db_selector
+from lookup import build_inv_lookup
 from exporter import export_sheet_bytes
 
 st.set_page_config(page_title="WAN Link | NT Report", page_icon="🔗", layout="wide")
@@ -34,13 +35,20 @@ if st.button("🔍 Process WAN Link", type="primary", use_container_width=True):
     except Exception as e:
         st.error(f"❌ Extract ล้มเหลว: {e}"); st.stop()
 
+    inv_lkp = build_inv_lookup(st.session_state.get('inventory_rows', []))
     rows, errors = [], []
     n    = len(files)
     prog = st.progress(0, text="กำลัง parse...")
     for i, (fname, content) in enumerate(files):
         prog.progress((i+1)/max(n,1), text=f"{i+1}/{n}: {fname}")
         try:
-            rows.extend(parse_cdp_neighbors(content))
+            parsed = parse_cdp_neighbors(content)
+            # Enrich with IP from inventory lookup
+            for r in parsed:
+                hn = r.get('Source Hostname', '')
+                info = inv_lkp.get(hn, {})
+                r['Source IP'] = info.get('IP Address', '')
+            rows.extend(parsed)
         except Exception as e:
             errors.append(f"{fname}: {e}")
     prog.empty()

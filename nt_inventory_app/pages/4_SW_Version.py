@@ -5,7 +5,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from archive_utils import extract_logs
-from lookup import build_version_map
+from lookup import build_version_map, build_inv_lookup
 from zone_db_manager import render_zone_db_selector
 
 st.set_page_config(page_title="SW Version | NT Report", page_icon="🖥️", layout="wide")

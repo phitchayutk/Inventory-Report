@@ -172,3 +172,35 @@ def build_version_map(files: list[tuple[str, str]]) -> dict[str, str]:
         except Exception:
             continue
     return version_map
+
+
+# ---------------------------------------------------------------------------
+# IP + Platform lookup from Inventory rows
+# ---------------------------------------------------------------------------
+
+def build_inv_lookup(inventory_rows: list[dict]) -> dict[str, dict]:
+    """
+    Build {hostname: {IP Address, Platform, Site Name, Zone, Network, SW Version}}
+    from inventory rows (use CHASSIS row preferred, else first row).
+    """
+    lookup: dict[str, dict] = {}
+    for r in inventory_rows:
+        hn = r.get('Hostname', '')
+        if not hn:
+            continue
+        if hn not in lookup:
+            lookup[hn] = {
+                'IP Address': r.get('IP Address', ''),
+                'Platform':   r.get('Platform', ''),
+                'Site Name':  r.get('Site Name', ''),
+                'Zone':       r.get('Zone', ''),
+                'Network':    r.get('Network', ''),
+                'SW Version': r.get('SW Version', ''),
+            }
+        else:
+            # Prefer CHASSIS row for Platform/IP (more reliable)
+            if r.get('Type') == 'CHASSIS':
+                existing = lookup[hn]
+                if r.get('IP Address'): existing['IP Address'] = r['IP Address']
+                if r.get('Platform'):   existing['Platform']   = r['Platform']
+    return lookup

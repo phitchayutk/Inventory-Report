@@ -7,7 +7,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from parsers import parse_show_interfaces_desc
 from archive_utils import extract_logs
-from lookup import classify_network, lookup_site_zone
+from lookup import classify_network, lookup_site_zone, build_inv_lookup
 from zone_db_manager import render_zone_db_selector, get_active_mapping
 from exporter import export_sheet_bytes
 
@@ -35,7 +35,8 @@ if st.button("🔍 Process Port Status", type="primary", use_container_width=Tru
     except Exception as e:
         st.error(f"❌ Extract ล้มเหลว: {e}"); st.stop()
 
-    mapping = get_active_mapping()
+    mapping   = get_active_mapping()
+    inv_lkp   = build_inv_lookup(st.session_state.get('inventory_rows', []))
     rows, errors = [], []
     n    = len(files)
     prog = st.progress(0, text="กำลัง parse...")
@@ -46,9 +47,16 @@ if st.button("🔍 Process Port Status", type="primary", use_container_width=Tru
             result = parse_show_interfaces_desc(content)
             hn = result['hostname']
             site, zone = lookup_site_zone(hn, mapping)
-            rows.append({'Hostname': hn, 'Network': classify_network(hn),
-                         'Site Name': site, 'Zone': zone,
-                         'port_counts': result['port_counts']})
+            inv_info   = inv_lkp.get(hn, {})
+            rows.append({
+                'Hostname':    hn,
+                'IP Address':  inv_info.get('IP Address', ''),
+                'Platform':    inv_info.get('Platform', ''),
+                'Network':     classify_network(hn),
+                'Site Name':   site or inv_info.get('Site Name', ''),
+                'Zone':        zone or inv_info.get('Zone', ''),
+                'port_counts': result['port_counts'],
+            })
         except Exception as e:
             errors.append(f"{fname}: {e}")
 

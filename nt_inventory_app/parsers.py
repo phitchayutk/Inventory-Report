@@ -75,13 +75,32 @@ def _classify_type(descr: str, pid: str) -> str:
 
 
 def _classify_platform(pid: str) -> str:
+    """
+    Classify platform from CHASSIS Product ID.
+    Rules:
+      ASR920   : ASR-920-xxx
+      ASR9900  : ASR-990x  (exactly 4 digits after ASR-9 → 990x)
+      ASR9000  : ASR-9xxxx (5+ digits after ASR-9, e.g. 9006, 9912, 9922)
+      NCS-5K   : NCS-5501, NCS-5502, NCS-55xx, NCS-540x, NCS-560x
+    """
     p = pid.upper()
-    if p.startswith('A9K') or p.startswith('ASR-9'):
-        return 'ASR9000'
-    if 'NCS-55' in p or 'NCS-5501' in p or 'NCS-5502' in p:
-        return 'NCS-5K'
-    if 'ASR-920' in p or 'ASR920' in p:
+
+    # ASR920 — must check BEFORE ASR9xxx
+    if re.search(r'ASR-920|ASR920', p):
         return 'ASR920'
+
+    # ASR9900 — ASR-990x  (3-digit: 990x)
+    if re.search(r'ASR-990[0-9](?!\d)', p):
+        return 'ASR9900'
+
+    # ASR9000 — ASR-9xxxx  (4+ digit model number like 9006, 9012, 9906, 9912)
+    if re.search(r'^A9K|^ASR9K|ASR-9[0-9]{3,}', p):
+        return 'ASR9000'
+
+    # NCS-5K (NCS-5501, NCS-5502, NCS-55xx, NCS-55Ax, N540, N560)
+    if re.search(r'NCS-55[0-9A-Z]|NCS-5[56][0-9]|N540|N560', p):
+        return 'NCS-5K'
+
     return ''
 
 
@@ -89,14 +108,36 @@ def _classify_platform(pid: str) -> str:
 # Parser 1: show inventory / admin show inventory (IOS XR)
 # ---------------------------------------------------------------------------
 
-def parse_show_inventory(text: str, is_admin: bool = False) -> list[dict]:
+def _ip_from_filename(filename: str) -> str:
+    """
+    Extract IP address from filename.
+    e.g. '118_174_252_251.log' → '118.174.252.251'
+         '10_244_248_165.txt'  → '10.244.248.165'
+    """
+    stem = re.sub(r'\.[^.]+$', '', filename)   # remove extension
+    # Try underscore-separated octets
+    m = re.match(r'^(\d{1,3})_(\d{1,3})_(\d{1,3})_(\d{1,3})', stem)
+    if m:
+        return f'{m.group(1)}.{m.group(2)}.{m.group(3)}.{m.group(4)}'
+    # Already dotted notation inside filename
+    m2 = re.search(r'(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})', stem)
+    if m2:
+        return m2.group(1)
+    return ''
+
+
+def parse_show_inventory(text: str, is_admin: bool = False,
+                         filename: str = '') -> list[dict]:
     """
     Parse output of `show inventory` or `admin show inventory`.
-    Returns list of dicts with keys: Hostname, Type, ProductID, CollectedSN, Platform, _is_admin
+    - IP Address extracted from filename (e.g. 118_174_252_251.log)
+    - Platform determined from CHASSIS PID, then propagated to all rows
+    Returns list of dicts.
     """
-    text = _clean_ansi(text)
+    text     = _clean_ansi(text)
     hostname = _extract_hostname(text)
-    records = []
+    ip_addr  = _ip_from_filename(filename) if filename else ''
+    records  = []
 
     # Valid PID: alphanumeric + dash/dot/slash/plus, min 3 chars
     _PID_VALID = re.compile(r'^[A-Za-z0-9][A-Za-z0-9\-\.\/\+]{2,}$')
@@ -116,18 +157,29 @@ def parse_show_inventory(text: str, is_admin: bool = False) -> list[dict]:
 
         if pid in ('N/A', '', 'MISSING', 'n/a'):
             continue
-        # Skip garbled PIDs (contain ^, $, ], or other non-alphanumeric-dash chars)
         if not _PID_VALID.match(pid):
             continue
 
+        item_type = _classify_type(descr, pid)
         records.append({
             'Hostname':    hostname,
-            'Type':        _classify_type(descr, pid),
+            'IP Address':  ip_addr,
+            'Type':        item_type,
             'ProductID':   pid,
             'CollectedSN': sn,
-            'Platform':    _classify_platform(pid),
+            'Platform':    _classify_platform(pid) if item_type == 'CHASSIS' else '',
             '_is_admin':   is_admin,
         })
+
+    # ── Propagate Platform from CHASSIS row to all rows of same hostname ──
+    chassis_platform = next(
+        (r['Platform'] for r in records if r['Type'] == 'CHASSIS' and r['Platform']),
+        ''
+    )
+    if chassis_platform:
+        for r in records:
+            if not r['Platform']:
+                r['Platform'] = chassis_platform
 
     return records
 
