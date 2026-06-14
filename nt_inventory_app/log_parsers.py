@@ -104,14 +104,20 @@ def _classify_type(descr: str, pid: str, name: str = '') -> str:
     # A99-RP-xxx = SUPERVISOR (ASR9900 Route Processor)
     if re.match(r'^A99-RP', pid_u):
         return 'SUPERVISOR'
+    # ASR9900-RP-TR, ASR9900-RP-SE etc. = SUPERVISOR
+    if re.match(r'^ASR-9900-RP', pid_u):
+        return 'SUPERVISOR'
     # ASR9K RSP = SUPERVISOR
     if re.match(r'^A9K-RSP', pid_u):
         return 'SUPERVISOR'
     # ASR9900 Power Tray = MODULE (not PWR)
-    if re.match(r'^ASR-9900-DC-PEM|^ASR-9900-AC-PEM|^A99-PWRTRAY', pid_u):
+    if re.match(r'^ASR-9900-(DC|AC)-PEM|^A99-PWRTRAY', pid_u):
         return 'MODULE'
-    # PIDs ending in -LC = Line Card (MODULE), even if DESCR says "Chassis"
+    # PIDs ending in -LC = Line Card (MODULE)
     if re.search(r'-LC$', pid_u) and re.match(r'^(A99-|ASR-990)', pid_u):
+        return 'MODULE'
+    # SFC (Switch Fabric Card) = MODULE  e.g. ASR-9912-SFC110, ASR-9906-SFC
+    if re.search(r'-SFC\d*$', pid_u):
         return 'MODULE'
     # A99-xxx-SE/FC/SIP = Fabric/Service card (MODULE)
     if re.match(r'^A99-', pid_u) and re.search(r'-(SE|FC|SIP)\d*$', pid_u):
