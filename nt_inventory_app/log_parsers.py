@@ -201,6 +201,14 @@ def _classify_platform(pid: str) -> str:
     if re.search(r'^ASR100[0-9]', p):
         return 'ASR1000'
 
+    # ME3600 series
+    if re.search(r'^ME-3[0-9]{3}X?', p):
+        return 'ME3600'
+
+    # Catalyst 8000 series (C8300, C8200 etc.)
+    if re.search(r'^C8[0-9]{3}', p):
+        return 'CISCO8300'
+
     # Catalyst 9000 series — each model has own platform name
     if re.search(r'^C94[0-9]{2}', p):   return 'CISCO9400'
     if re.search(r'^C95[0-9]{2}', p):   return 'CISCO9500'
@@ -208,11 +216,10 @@ def _classify_platform(pid: str) -> str:
     if re.search(r'^C92[0-9]{2}', p):   return 'CISCO9200'
     if re.search(r'^C91[0-9]{2}', p):   return 'CISCO9100'
 
-    # NCS-5K (NCS-5501, NCS-5502, NCS-55xx, N540, N560)
-    # NCS-5K — only bare chassis PIDs (no suffix after model number)
-    # NCS-5001, NCS-5002, NCS-5501, NCS-5502, N540-xxx, N560-xxx
+    # NCS-5K — bare chassis PIDs only
     if re.match(r'^NCS-500[12]$', p): return 'NCS-5K'
-    if re.match(r'^NCS-55[0-9]{2}', p) and not re.search(r'-(FAN|PWR|AC|DC|FN|LC|RP|SC)', p): return 'NCS-5K'
+    # NCS-55xx (NCS-5501, NCS-5501-SE, NCS-55A2-MOD-SE-S etc.)
+    if re.match(r'^NCS-55', p) and not re.search(r'-(FAN|PWR|AC|DC|FN|LC|RP|SC)$', p): return 'NCS-5K'
     if re.match(r'^N5[46]0', p) and not re.search(r'-(FAN|PSU)', p): return 'NCS-5K'
 
     return ''
