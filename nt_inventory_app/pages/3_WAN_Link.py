@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from parsers import parse_cdp_neighbors
+from log_parsers import parse_cdp_neighbors
 from archive_utils import extract_logs
 from zone_db_manager import render_zone_db_selector
 from report_date_widget import render_report_date

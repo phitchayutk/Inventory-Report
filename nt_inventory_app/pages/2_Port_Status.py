@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from parsers import parse_show_interfaces_desc
+from log_parsers import parse_show_interfaces_desc
 from archive_utils import extract_logs
 from lookup import classify_network, lookup_site_zone, build_inv_lookup
 from zone_db_manager import render_zone_db_selector
