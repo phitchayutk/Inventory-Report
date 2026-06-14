@@ -37,9 +37,17 @@ def _extract_hostname(text: str) -> str:
       RP/0/RSP0/CPU0:kkm_srw_pe2#
       RP/0/RP0/CPU0:acr_acr_aggpe1#
       atg_atg_lpe1#
+      cbi_rr_01#
     """
-    m = re.search(r'(?:CPU0:|^)([a-zA-Z0-9][a-zA-Z0-9_\-]+)#', text, re.MULTILINE)
-    return m.group(1) if m else 'unknown'
+    # IOS XR: CPU0:hostname#
+    m = re.search(r'CPU0:([a-zA-Z0-9][a-zA-Z0-9_\-]+)#', text, re.MULTILINE)
+    if m:
+        return m.group(1)
+    # IOS XE: hostname# (at start of line)
+    m = re.search(r'^([a-zA-Z0-9][a-zA-Z0-9_\-]+)#', text, re.MULTILINE)
+    if m:
+        return m.group(1)
+    return 'unknown'
 
 
 def _clean_device_id(raw: str) -> str:
@@ -113,6 +121,12 @@ def _classify_type(descr: str, pid: str, name: str = '') -> str:
     # ASR9900 Power Tray = MODULE (not PWR)
     if re.match(r'^ASR-9900-(DC|AC)-PEM|^A99-PWRTRAY', pid_u):
         return 'MODULE'
+    # N540 / N560 FAN → FAN
+    if re.match(r'^N5[46]0-FAN', pid_u):
+        return 'FAN'
+    # N540 / N560 PSU → PWR
+    if re.match(r'^N5[46]0-PSU', pid_u):
+        return 'PWR'
     # PIDs ending in -LC = Line Card (MODULE)
     if re.search(r'-LC$', pid_u) and re.match(r'^(A99-|ASR-990)', pid_u):
         return 'MODULE'
@@ -155,30 +169,37 @@ def _classify_type(descr: str, pid: str, name: str = '') -> str:
 
 
 def _classify_platform(pid: str) -> str:
-    """
-    Classify platform from CHASSIS Product ID.
-    Rules:
-      ASR920   : ASR-920-xxx
-      ASR9900  : ASR-990x  (exactly 4 digits after ASR-9 → 990x)
-      ASR9000  : ASR-9xxxx (5+ digits after ASR-9, e.g. 9006, 9912, 9922)
-      NCS-5K   : NCS-5501, NCS-5502, NCS-55xx, NCS-540x, NCS-560x
-    """
     p = pid.upper()
 
-    # ASR920 — must check BEFORE ASR9xxx
+    # ASR920 — check BEFORE ASR9xxx
     if re.search(r'ASR-920|ASR920', p):
         return 'ASR920'
 
-    # ASR9900 — ASR-990x  (3-digit: 990x)
+    # ASR900 series (ASR-902, ASR-903, ASR-907, ASR-912 — small aggregation routers)
+    if re.search(r'^ASR-90[0-9](?!\d)|^ASR900', p):
+        return 'ASR900'
+
+    # ASR9900 — ASR-990x (4-digit 990x)
     if re.search(r'ASR-990[0-9](?!\d)', p):
         return 'ASR9900'
 
-    # ASR9000 — ASR-9xxxx  (4+ digit model number like 9006, 9012, 9906, 9912)
+    # ASR9000 — A9K-xxx or ASR-9xxxx (5+ digit model)
     if re.search(r'^A9K|^ASR9K|ASR-9[0-9]{3,}', p):
         return 'ASR9000'
 
-    # NCS-5K (NCS-5501, NCS-5502, NCS-55xx, NCS-55Ax, N540, N560)
-    if re.search(r'NCS-55[0-9A-Z]|NCS-5[56][0-9]|N540|N560', p):
+    # ASR1000
+    if re.search(r'^ASR100[0-9]', p):
+        return 'ASR1000'
+
+    # Catalyst 9000 series — each model has own platform name
+    if re.search(r'^C94[0-9]{2}', p):   return 'CISCO9400'
+    if re.search(r'^C95[0-9]{2}', p):   return 'CISCO9500'
+    if re.search(r'^C93[0-9]{2}', p):   return 'CISCO9300'
+    if re.search(r'^C92[0-9]{2}', p):   return 'CISCO9200'
+    if re.search(r'^C91[0-9]{2}', p):   return 'CISCO9100'
+
+    # NCS-5K (NCS-5501, NCS-5502, NCS-55xx, N540, N560)
+    if re.search(r'NCS-55[0-9A-Z]|NCS-5[56][0-9]|^N540|^N560', p):
         return 'NCS-5K'
 
     return ''
@@ -283,12 +304,23 @@ _INTF_RE = re.compile(
     re.IGNORECASE
 )
 
+# Physical interface prefixes only — exclude pw, lo, bd, vi, mg, null, tunnel etc.
+_PHYSICAL_INTF_RE = re.compile(
+    r'^(HundredGig|FortyGig|TenGig|TenGigabit|GigabitEthernet|Gi|Te|Fo|Hu|FastEthernet|Fa)',
+    re.IGNORECASE
+)
+
 def _speed_bucket(intf: str) -> str | None:
+    """Return speed bucket for physical interfaces only. Returns None for non-physical."""
+    # Skip non-physical: pw, Lo, BD, Vi, Mg, Null, Tunnel, Bundle, BVI, BDI etc.
+    if not _PHYSICAL_INTF_RE.match(intf):
+        return None
     u = intf.upper()
     if u.startswith('HU') or 'HUNDREDGIG' in u:  return '100G'
     if u.startswith('FO') or 'FORTYGIG' in u:     return '40G'
     if u.startswith('TE') or 'TENGIG' in u:        return '10G'
     if u.startswith('GI') or 'GIGABIT' in u:       return '1G'
+    if u.startswith('FA') or 'FASTETHERNET' in u:  return '1G'
     return None
 
 

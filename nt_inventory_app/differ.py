@@ -90,23 +90,49 @@ def _site_prefix(hostname: str) -> str:
     return '_'.join(parts[:2]) if len(parts) >= 2 else hostname.lower()
 
 
+def _is_main_chassis_pid(pid: str) -> bool:
+    """
+    Return True if PID represents the main chassis unit (not LC, SFC, RP, FAN, PWR).
+    e.g. ASR-9903 ✅ | ASR-9903-LC ❌ | ASR-9912-SFC110 ❌ | ASR-9900-RP-TR ❌
+    """
+    p = pid.upper()
+    if re.search(r'-LC$|-SFC\d*$|-RP\b|-FAN|-PSU|-PEM', p):
+        return False
+    return True
+
+
 def compute_pivot(current_rows: list[dict]) -> list[dict]:
     """
-    Build Pivot rows from CHASSIS records of current month.
-    Columns: Hostname, ProductID, SiteName, Site
-    Sorted by Hostname.
+    Build Pivot rows — 1 row per Hostname (main CHASSIS only).
+    Priority: prefer main chassis PID (not LC/SFC/RP) with non-empty Platform.
     """
     chassis = _chassis_rows(current_rows)
-    pivot   = []
+
+    # Group by hostname
+    by_host: dict[str, list[dict]] = {}
     for r in chassis:
         hn = str(r.get('Hostname', '')).strip()
+        if not hn or hn == 'unknown':
+            continue
+        by_host.setdefault(hn, []).append(r)
+
+    pivot = []
+    for hn, rows in sorted(by_host.items()):
+        # Pick best row: main chassis PID with platform > main chassis > any
+        main = next((r for r in rows if _is_main_chassis_pid(r.get('ProductID','')) and r.get('Platform')), None)
+        if main is None:
+            main = next((r for r in rows if _is_main_chassis_pid(r.get('ProductID',''))), None)
+        if main is None:
+            main = rows[0]
+
         pivot.append({
             'Hostname':  hn,
-            'ProductID': str(r.get('ProductID', '')).strip(),
-            'SiteName':  str(r.get('Site Name', '')).strip(),
+            'ProductID': str(main.get('ProductID', '')).strip(),
+            'SiteName':  str(main.get('Site Name', '')).strip(),
             'Site':      _site_prefix(hn),
         })
-    return sorted(pivot, key=lambda x: x['Hostname'])
+
+    return pivot
 
 
 # ---------------------------------------------------------------------------
