@@ -66,11 +66,26 @@ _TYPE_RULES = [
     (r'Modular Linecard|Line Card|MPA|MOD',      'MODULE'),
 ]
 
-def _classify_type(descr: str, pid: str) -> str:
+_CHASSIS_PID_RE = re.compile(
+    r'^(ASR-9[0-9]{3,}|A9K-RSP|A9K-MOD|NCS-55[0-9]|NCS-54[0-9]|NCS-56[0-9]|N540|N560|ASR-920[^-]|ASR-920$)',
+    re.IGNORECASE
+)
+_CHASSIS_NAME_RE = re.compile(r'^chassis\b', re.IGNORECASE)
+
+def _classify_type(descr: str, pid: str, name: str = '') -> str:
+    # NAME starts with "chassis" (e.g. "Chassis", "chassis ASR-9006-DC-V2")
+    if _CHASSIS_NAME_RE.match(name.strip()):
+        return 'CHASSIS'
     combined = (descr + ' ' + pid).upper()
+    # Chassis keyword in DESCR (IOS XR style: "ASR 9006 ... Chassis")
+    if re.search(r'\bCHASSIS\b', combined) and not re.search(r'PEM|POWER|FAN', combined):
+        return 'CHASSIS'
     for pattern, label in _TYPE_RULES:
         if re.search(pattern.upper(), combined):
             return label
+    # PID matches known chassis-only PID → CHASSIS
+    if _CHASSIS_PID_RE.match(pid.strip()):
+        return 'CHASSIS'
     return 'MODULE'
 
 
@@ -143,13 +158,23 @@ def parse_show_inventory(text: str, is_admin: bool = False,
     _PID_VALID = re.compile(r'^[A-Za-z0-9][A-Za-z0-9\-\.\/\+]{2,}$')
 
     block_re = re.compile(
-        # NAME: "..." , DESCR: "..."  — on ONE line (standard IOS XR format)
+        # NAME: "..." , DESCR: "..."  — on ONE line (IOS XR & IOS XE)
         r'NAME:\s*"([^"]*)"[^"\n]*DESCR:\s*"([^"]*)"\s*\n'
-        # PID: xxx , VID: xxx , SN: xxx  — all on ONE line
-        r'PID:\s*([^,\n]+?)\s*,\s*VID:[^,\n]*,\s*SN:\s*(\S*)',
+        # PID: xxx (with possible wide spacing) , VID: xxx , SN: xxx
+        r'PID:\s*([^,\n]*?)\s*,\s*VID:[^,\n]*,\s*SN:\s*(\S*)',
     )
 
-    for m in block_re.finditer(text):
+    # Alternate: VID might have extra spaces or be empty
+    block_re_alt = re.compile(
+        r'NAME:\s*"([^"]*)"[^"\n]*DESCR:\s*"([^"]*)"\s*\n'
+        r'PID:\s*([^\s,][^,\n]*?)\s*,\s*VID:[^\n]*SN:\s*(\S+)',
+    )
+
+    matches = list(block_re.finditer(text))
+    if not matches:
+        matches = list(block_re_alt.finditer(text))
+
+    for m in matches:
         name  = m.group(1).strip()
         descr = (m.group(2) or '').strip()
         pid   = m.group(3).strip()
@@ -160,7 +185,7 @@ def parse_show_inventory(text: str, is_admin: bool = False,
         if not _PID_VALID.match(pid):
             continue
 
-        item_type = _classify_type(descr, pid)
+        item_type = _classify_type(descr, pid, name=name)
         records.append({
             'Hostname':    hostname,
             'IP Address':  ip_addr,
