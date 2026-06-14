@@ -95,7 +95,7 @@ if st.session_state.inventory_rows:
     m3.metric("show inventory",  f"{len(df[~df['_is_admin']]):,}")
     m4.metric("admin inventory", f"{len(df[df['_is_admin']]):,}")
 
-    tab1, tab2, tab3 = st.tabs(["📋 By Type", "📋 By Platform", "📋 By Zone"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📋 By Type", "📋 By Platform", "📋 By Zone", "🔍 No Chassis"])
     with tab1:
         tc = df['Type'].value_counts().reset_index(); tc.columns = ['Type', 'Count']
         st.dataframe(tc, use_container_width=True, height=220)
@@ -105,6 +105,18 @@ if st.session_state.inventory_rows:
     with tab3:
         zc = df['Zone'].value_counts().reset_index(); zc.columns = ['Zone', 'Count']
         st.dataframe(zc, use_container_width=True, height=220)
+    with tab4:
+        all_hosts    = set(df['Hostname'].unique())
+        chassis_hosts = set(df[df['Type'] == 'CHASSIS']['Hostname'].unique())
+        no_chassis   = sorted(all_hosts - chassis_hosts)
+        st.caption(f"Hostname ที่ไม่มี CHASSIS row: **{len(no_chassis):,}** จาก {len(all_hosts):,} ทั้งหมด")
+        if no_chassis:
+            # Show with their available types to help debug
+            nc_df = df[df['Hostname'].isin(no_chassis)][['Hostname','Platform','Type','ProductID']].drop_duplicates()
+            nc_df = nc_df.sort_values('Hostname')
+            st.dataframe(nc_df, use_container_width=True, height=400)
+        else:
+            st.success("✅ ทุก Hostname มี CHASSIS row")
 
     display_cols = [c for c in ['Hostname','Network','Site Name','Zone','Platform',
                                  'Type','ProductID','CollectedSN','SW Version'] if c in df.columns]
