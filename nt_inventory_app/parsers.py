@@ -12,6 +12,22 @@ from pathlib import Path
 
 
 # ---------------------------------------------------------------------------
+# Terminal / ANSI escape sequence cleaner
+# ---------------------------------------------------------------------------
+
+# Matches: ESC[ ... m  (color/SGR), ESC[ ... other, ESC(B, ESC= etc.
+_ANSI_RE = re.compile(r'\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+# Also strip bare control chars except \t \n \r
+_CTRL_RE = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]')
+
+def _clean_ansi(text: str) -> str:
+    """Remove ANSI escape codes and stray control characters from log text."""
+    text = _ANSI_RE.sub('', text)
+    text = _CTRL_RE.sub('', text)
+    return text
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
@@ -78,15 +94,18 @@ def parse_show_inventory(text: str, is_admin: bool = False) -> list[dict]:
     Parse output of `show inventory` or `admin show inventory`.
     Returns list of dicts with keys: Hostname, Type, ProductID, CollectedSN, Platform, _is_admin
     """
+    text = _clean_ansi(text)
     hostname = _extract_hostname(text)
     records = []
 
+    # Valid PID: alphanumeric + dash/dot/slash/plus, min 3 chars
+    _PID_VALID = re.compile(r'^[A-Za-z0-9][A-Za-z0-9\-\.\/\+]{2,}$')
+
     block_re = re.compile(
-        r'NAME:\s*"([^"]*)"[^\n]*\n'
-        r'(?:DESCR:\s*"([^"]*)"\s*\n)?'
-        r'PID:\s*([^\s,]+)[^\n]*\n'
-        r'[^\n]*SN:\s*(\S*)',
-        re.DOTALL
+        # NAME: "..." , DESCR: "..."  — on ONE line (standard IOS XR format)
+        r'NAME:\s*"([^"]*)"[^"\n]*DESCR:\s*"([^"]*)"\s*\n'
+        # PID: xxx , VID: xxx , SN: xxx  — all on ONE line
+        r'PID:\s*([^,\n]+?)\s*,\s*VID:[^,\n]*,\s*SN:\s*(\S*)',
     )
 
     for m in block_re.finditer(text):
@@ -96,6 +115,9 @@ def parse_show_inventory(text: str, is_admin: bool = False) -> list[dict]:
         sn    = m.group(4).strip()
 
         if pid in ('N/A', '', 'MISSING', 'n/a'):
+            continue
+        # Skip garbled PIDs (contain ^, $, ], or other non-alphanumeric-dash chars)
+        if not _PID_VALID.match(pid):
             continue
 
         records.append({
@@ -136,6 +158,7 @@ def parse_show_interfaces_desc(text: str) -> dict:
       'interfaces': [{'Interface','Status','Description'}, ...]
     }
     """
+    text = _clean_ansi(text)
     hostname = _extract_hostname(text)
     counts = {s: {'Up': 0, 'Down': 0, 'Admin Down': 0} for s in ['100G', '40G', '10G', '1G']}
     interfaces = []
@@ -174,6 +197,7 @@ def parse_cdp_neighbors(text: str) -> list[dict]:
     IOS XR:   Device ID / Interface / Port ID on separate lines
     IOS XE:   Interface and Port ID on same line
     """
+    text  = _clean_ansi(text)
     hostname = _extract_hostname(text)
     records  = []
     lines    = [l.rstrip() for l in text.splitlines()]
@@ -241,6 +265,7 @@ def parse_cdp_neighbors(text: str) -> list[dict]:
 
 def detect_log_type(text: str) -> str:
     """Returns 'inventory', 'interfaces', 'cdp', or 'unknown'."""
+    text = _clean_ansi(text)
     if re.search(r'admin show inventory', text, re.IGNORECASE):
         return 'admin_inventory'
     if re.search(r'show inventory', text, re.IGNORECASE) or re.search(r'PID:\s*\S+.*\nVID:.*\nSN:', text):
