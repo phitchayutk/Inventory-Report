@@ -107,6 +107,9 @@ def _classify_type(descr: str, pid: str, name: str = '') -> str:
     # ASR9K RSP = SUPERVISOR
     if re.match(r'^A9K-RSP', pid_u):
         return 'SUPERVISOR'
+    # ASR9900 Power Tray = MODULE (not PWR)
+    if re.match(r'^ASR-9900-DC-PEM|^ASR-9900-AC-PEM|^A99-PWRTRAY', pid_u):
+        return 'MODULE'
     # PIDs ending in -LC = Line Card (MODULE), even if DESCR says "Chassis"
     if re.search(r'-LC$', pid_u) and re.match(r'^(A99-|ASR-990)', pid_u):
         return 'MODULE'

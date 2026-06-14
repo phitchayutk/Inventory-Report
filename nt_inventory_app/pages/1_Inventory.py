@@ -8,18 +8,18 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from log_parsers import parse_show_inventory
 from archive_utils import extract_logs
 from lookup import classify_network, lookup_site_zone
-from zone_db_manager import render_zone_db_selector, get_active_mapping
+from zone_db_manager import render_zone_db_selector
+from session_manager import render_session_manager, init_session, get_active_mapping
 from report_date_widget import render_report_date, get_report_date
 from exporter import export_sheet_bytes
 
 st.set_page_config(page_title="Inventory | NT Report", page_icon="📦", layout="wide")
 
-for key, default in [('inventory_rows', []), ('inv_file_count', 0)]:
-    if key not in st.session_state:
-        st.session_state[key] = default
+init_session()
 
 render_zone_db_selector(location="sidebar")
 render_report_date()
+render_session_manager()
 
 st.title("📦 Inventory")
 st.caption("Upload ไฟล์ `show inventory` และ `admin show inventory` รวมในไฟล์เดียว (.zip / .7z)")

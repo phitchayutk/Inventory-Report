@@ -8,6 +8,7 @@ from exporter import export_to_bytes_full, write_pivot, write_new_device, write_
 from differ import (load_nt_overall_from_excel, compute_new_off, compute_pivot,
                     build_eos_ldos_map, enrich_eos_ldos)
 from zone_db_manager import render_zone_db_selector
+from session_manager import render_session_manager, init_session
 from report_date_widget import render_report_date, get_report_date
 from openpyxl import Workbook
 import io
@@ -24,6 +25,7 @@ for key, default in [
 
 render_zone_db_selector(location="sidebar")
 render_report_date()
+render_session_manager()
 
 st.title("📥 Export Report")
 st.divider()

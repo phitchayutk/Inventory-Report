@@ -23,9 +23,11 @@ for key, default in [
 
 # ── Sidebar: Zone DB selector ──────────────────────────────────────────────────
 from zone_db_manager import render_zone_db_selector
+from session_manager import render_session_manager, init_session
 from report_date_widget import render_report_date
 render_zone_db_selector(location="sidebar")
 render_report_date()
+render_session_manager()
 
 # ── Main content ───────────────────────────────────────────────────────────────
 st.title("📋 NT Inventory Report Generator")

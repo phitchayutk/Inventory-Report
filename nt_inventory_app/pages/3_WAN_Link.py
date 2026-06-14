@@ -9,6 +9,7 @@ from log_parsers import parse_cdp_neighbors
 from archive_utils import extract_logs
 from lookup import build_inv_lookup
 from zone_db_manager import render_zone_db_selector
+from session_manager import render_session_manager, init_session
 from report_date_widget import render_report_date, get_report_date
 from exporter import export_sheet_bytes
 
@@ -20,6 +21,7 @@ for key, default in [('wan_link_rows', []), ('wan_file_count', 0)]:
 
 render_zone_db_selector(location="sidebar")
 render_report_date()
+render_session_manager()
 
 st.title("🔗 WAN Link")
 st.caption("Upload ไฟล์ `show cdp neighbors detail` (.zip / .7z)")

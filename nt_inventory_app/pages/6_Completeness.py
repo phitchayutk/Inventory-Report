@@ -7,6 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from zone_db_manager import render_zone_db_selector
+from session_manager import render_session_manager, init_session
 from report_date_widget import render_report_date
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -25,6 +26,7 @@ for key, default in [
 
 render_zone_db_selector(location="sidebar")
 render_report_date()
+render_session_manager()
 
 st.title("🔎 Completeness Check")
 st.caption("ตรวจสอบว่า hostname ใดขาดหายไปจาก section ไหนบ้าง")
