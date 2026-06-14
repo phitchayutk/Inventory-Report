@@ -46,7 +46,7 @@ if st.button("🔍 Process SW Version", type="primary", use_container_width=True
         prog.progress((i+1)/max(n,1), text=f"{i+1}/{n}: {fname}")
         try:
             hn, ver = parse_show_version(content)
-            if hn != 'unknown' and ver:
+            if hn not in ('unknown', '') and ver:
                 version_map[hn] = ver
         except Exception as e:
             errors.append(f"{fname}: {e}")

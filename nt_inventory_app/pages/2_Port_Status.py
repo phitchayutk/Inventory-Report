@@ -50,6 +50,8 @@ if st.button("🔍 Process Port Status", type="primary", use_container_width=Tru
         try:
             result   = parse_show_interfaces_desc(content)
             hn       = result['hostname']
+            if hn == 'unknown':
+                continue
             site, zone = lookup_site_zone(hn, mapping)
             inv_info = inv_lkp.get(hn, {})
             rows.append({

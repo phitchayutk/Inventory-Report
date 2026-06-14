@@ -50,6 +50,7 @@ if st.button("🔍 Process Inventory", type="primary", use_container_width=True)
         is_admin = 'admin show inventory' in content.lower()
         try:
             rows = parse_show_inventory(content, is_admin=is_admin, filename=fname)
+            rows = [r for r in rows if r.get('Hostname','') not in ('','unknown')]
             for r in rows:
                 hn = r.get('Hostname', '')
                 site, zone = lookup_site_zone(hn, mapping)

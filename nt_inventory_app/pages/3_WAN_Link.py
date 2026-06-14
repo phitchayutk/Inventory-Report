@@ -48,6 +48,8 @@ if st.button("🔍 Process WAN Link", type="primary", use_container_width=True):
         prog.progress((i+1)/max(n,1), text=f"{i+1}/{n}: {fname}")
         try:
             parsed = parse_cdp_neighbors(content)
+            # Filter out unknown source hostnames
+            parsed = [r for r in parsed if r.get('Source Hostname','') not in ('','unknown')]
             for r in parsed:
                 hn = r.get('Source Hostname', '')
                 r['Source IP'] = inv_lkp.get(hn, {}).get('IP Address', '')
