@@ -95,11 +95,12 @@ _CHASSIS_PID_RE = re.compile(
 _CHASSIS_NAME_RE = re.compile(r'^chassis\b', re.IGNORECASE)
 
 def _classify_type(descr: str, pid: str, name: str = '') -> str:
-    pid_u   = pid.strip().upper()
-    descr_u = descr.strip().upper()
+    pid_u    = pid.strip().upper()
+    descr_u  = descr.strip().upper()
+    name_u   = name.strip().upper()
     combined = descr_u + ' ' + pid_u
 
-    # 1. PID-first rules (highest priority — overrides DESCR)
+    # 1. PID-first rules (highest priority)
     # A99-RP-xxx = SUPERVISOR (ASR9900 Route Processor)
     if re.match(r'^A99-RP', pid_u):
         return 'SUPERVISOR'
@@ -113,20 +114,31 @@ def _classify_type(descr: str, pid: str, name: str = '') -> str:
     if re.match(r'^A99-', pid_u) and re.search(r'-(SE|FC|SIP)\d*$', pid_u):
         return 'MODULE'
 
-    # 2. NAME starts with "chassis"
+    # 2. NCS fixed-chassis (NCS-5501, NCS-5502 etc.) — NAME determines type
+    #    NAME: "Rack 0"   → CHASSIS
+    #    NAME: "0/RP0"    → SUPERVISOR
+    if re.match(r'^NCS-55\d\d', pid_u):
+        if re.match(r'^RACK\s*\d', name_u):
+            return 'CHASSIS'
+        if re.search(r'/RP\d', name_u) or 'ROUTE PROCESSOR' in descr_u:
+            return 'SUPERVISOR'
+        # fallback for NCS-5501 with no clear name
+        return 'CHASSIS'
+
+    # 3. NAME starts with "chassis" → CHASSIS
     if _CHASSIS_NAME_RE.match(name.strip()):
         return 'CHASSIS'
 
-    # 3. CHASSIS keyword in DESCR — but NOT if PID is a line card
+    # 4. CHASSIS keyword in DESCR (but PID-LC already handled above)
     if re.search(r'\bCHASSIS\b', combined) and not re.search(r'\b(PEM|FAN|POWER|PWR)\b', combined):
         return 'CHASSIS'
 
-    # 4. DESCR-based rules
+    # 5. DESCR-based rules
     for pattern, label in _TYPE_RULES:
         if re.search(pattern, combined, re.IGNORECASE):
             return label
 
-    # 5. Fallback: known chassis PID pattern
+    # 6. Fallback: known chassis PID pattern
     if _CHASSIS_PID_RE.match(pid.strip()):
         return 'CHASSIS'
 
