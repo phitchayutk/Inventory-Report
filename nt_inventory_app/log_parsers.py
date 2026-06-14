@@ -97,7 +97,7 @@ _TYPE_RULES = [
 ]
 
 _CHASSIS_PID_RE = re.compile(
-    r'^(ASR-9[0-9]{3,}|A9K-RSP|A9K-MOD|NCS-55[0-9]|NCS-54[0-9]|NCS-56[0-9]|N540|N560|ASR-920[^-]|ASR-920$)',
+    r'^(ASR-9[0-9]{3,}|A9K-RSP|A9K-MOD|NCS-55[0-9]|NCS-54[0-9]|NCS-56[0-9]|NCS-500[12]|N540|N560|ASR-920[^-]|ASR-920$)',
     re.IGNORECASE
 )
 _CHASSIS_NAME_RE = re.compile(r'^chassis\b', re.IGNORECASE)
@@ -121,6 +121,11 @@ def _classify_type(descr: str, pid: str, name: str = '') -> str:
     # ASR9900 Power Tray = MODULE (not PWR)
     if re.match(r'^ASR-9900-(DC|AC)-PEM|^A99-PWRTRAY', pid_u):
         return 'MODULE'
+    # NCS-5001/5002 FAN/PWR
+    if re.search(r'^NCS-500[12]-FAN', pid_u): return 'FAN'
+    if re.search(r'^NCS-500[12]-PWR|^NCS-500[12]-AC|^NCS-500[12]-DC', pid_u): return 'PWR'
+    # NCS-5001/5002 FN/LC modules
+    if re.search(r'^NCS-5001-FN|^NCS-5002-FN|^NCS-5001-LC|^NCS-5002-LC', pid_u): return 'MODULE'
     # N540 / N560 FAN → FAN
     if re.match(r'^N5[46]0-FAN', pid_u):
         return 'FAN'
@@ -137,10 +142,15 @@ def _classify_type(descr: str, pid: str, name: str = '') -> str:
     if re.match(r'^A99-', pid_u) and re.search(r'-(SE|FC|SIP)\d*$', pid_u):
         return 'MODULE'
 
-    # 2. NCS fixed-chassis (NCS-5501, NCS-5502 etc.) — NAME determines type
+    # NCS non-chassis suffixes → skip to MODULE/FAN/PWR (handled above in rules)
+    # Ensure NCS-5xxx-LC, NCS-5xxx-SC are MODULE
+    if re.search(r'^NCS-5[0-9]+-(?:LC|SC|FN)', pid_u):
+        return 'MODULE'
+
+    # 2. NCS fixed-chassis (NCS-5501, NCS-5002 etc.) — NAME determines type
     #    NAME: "Rack 0"   → CHASSIS
     #    NAME: "0/RP0"    → SUPERVISOR
-    if re.match(r'^NCS-55\d\d', pid_u):
+    if re.match(r'^NCS-5[05][0-9][0-9]', pid_u):
         if re.match(r'^RACK\s*\d', name_u):
             return 'CHASSIS'
         if re.search(r'/RP\d', name_u) or 'ROUTE PROCESSOR' in descr_u:
@@ -199,8 +209,11 @@ def _classify_platform(pid: str) -> str:
     if re.search(r'^C91[0-9]{2}', p):   return 'CISCO9100'
 
     # NCS-5K (NCS-5501, NCS-5502, NCS-55xx, N540, N560)
-    if re.search(r'NCS-55[0-9A-Z]|NCS-5[56][0-9]|^N540|^N560', p):
-        return 'NCS-5K'
+    # NCS-5K — only bare chassis PIDs (no suffix after model number)
+    # NCS-5001, NCS-5002, NCS-5501, NCS-5502, N540-xxx, N560-xxx
+    if re.match(r'^NCS-500[12]$', p): return 'NCS-5K'
+    if re.match(r'^NCS-55[0-9]{2}', p) and not re.search(r'-(FAN|PWR|AC|DC|FN|LC|RP|SC)', p): return 'NCS-5K'
+    if re.match(r'^N5[46]0', p) and not re.search(r'-(FAN|PSU)', p): return 'NCS-5K'
 
     return ''
 
