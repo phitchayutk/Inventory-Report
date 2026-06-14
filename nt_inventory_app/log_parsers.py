@@ -55,15 +55,37 @@ def _clean_device_id(raw: str) -> str:
 # ---------------------------------------------------------------------------
 
 _TYPE_RULES = [
-    (r'Route Switch Processor|RSP880|RSP440',   'SUPERVISOR'),
-    (r'Fan Tray|FAN',                            'FAN'),
-    (r'Power Module|Power Supply|PEM|PWR',       'PWR'),
-    (r'Chassis|chassis',                         'CHASSIS'),
-    (r'100GBASE|CFP|QSFP.*100G',                 '100G Transceiver'),
-    (r'40GBASE|QSFP.*40G',                       '40G Transceiver'),
-    (r'10GBASE|XFP|SFP.*10G',                   '10G Transceiver'),
-    (r'1000BASE|GLC|SFP-GE|SFP.*1G',            '1G Transceiver'),
-    (r'Modular Linecard|Line Card|MPA|MOD',      'MODULE'),
+    # SUPERVISOR — check before generic MODULE
+    # IOS XR RSP patterns
+    (r'Route Switch Processor|RSP880|RSP440|RSP4|RSP-4|RSP880-LT',  'SUPERVISOR'),
+    # ASR9900 Route Processor: A99-RP-F, A99-RP-SE, A99-RP2-TR etc.
+    (r'^A99-RP',                                                      'SUPERVISOR'),
+    # NCS RP/SC patterns
+    (r'NCS-5500-RP|NCS4K-RP',                                        'SUPERVISOR'),
+
+    # FAN
+    (r'Fan Tray|FAN-TRAY|FAN TRAY',                                  'FAN'),
+
+    # POWER
+    (r'Power Module|Power Supply|PWR-\d|AC-\d+W|DC-\d+W',           'PWR'),
+
+    # CHASSIS — handled separately in _classify_type, but keep as fallback
+    (r'\bCHASSIS\b',                                                  'CHASSIS'),
+
+    # LINE CARD / MODULE — ASR9900 specific
+    # A99-xxxLC = Line Card
+    (r'^A99-.*LC\b|ASR-9903-LC|ASR-9906-LC',                        'MODULE'),
+    # A99-xxxSE/FC = Fabric Card
+    (r'^A99-.*(?:SE|FC|SIP)\b',                                      'MODULE'),
+
+    # TRANSCEIVERS
+    (r'100GBASE|CFP2?|QSFP.*100G|100G.*QSFP',                       '100G Transceiver'),
+    (r'40GBASE|QSFP.*40G|40G.*QSFP',                                 '40G Transceiver'),
+    (r'10GBASE|XFP|SFP\+.*10G|SFP.*10G|10GBASE',                   '10G Transceiver'),
+    (r'1000BASE|GLC|SFP-GE|SFP.*1G|1000BASE',                       '1G Transceiver'),
+
+    # Generic LINE CARD
+    (r'Modular Linecard|Line Card|MPA|MOD80|MOD160|MOD400',         'MODULE'),
 ]
 
 _CHASSIS_PID_RE = re.compile(
@@ -73,19 +95,41 @@ _CHASSIS_PID_RE = re.compile(
 _CHASSIS_NAME_RE = re.compile(r'^chassis\b', re.IGNORECASE)
 
 def _classify_type(descr: str, pid: str, name: str = '') -> str:
-    # NAME starts with "chassis" (e.g. "Chassis", "chassis ASR-9006-DC-V2")
+    pid_u   = pid.strip().upper()
+    descr_u = descr.strip().upper()
+    combined = descr_u + ' ' + pid_u
+
+    # 1. PID-first rules (highest priority — overrides DESCR)
+    # A99-RP-xxx = SUPERVISOR (ASR9900 Route Processor)
+    if re.match(r'^A99-RP', pid_u):
+        return 'SUPERVISOR'
+    # ASR9K RSP = SUPERVISOR
+    if re.match(r'^A9K-RSP', pid_u):
+        return 'SUPERVISOR'
+    # PIDs ending in -LC = Line Card (MODULE), even if DESCR says "Chassis"
+    if re.search(r'-LC$', pid_u) and re.match(r'^(A99-|ASR-990)', pid_u):
+        return 'MODULE'
+    # A99-xxx-SE/FC/SIP = Fabric/Service card (MODULE)
+    if re.match(r'^A99-', pid_u) and re.search(r'-(SE|FC|SIP)\d*$', pid_u):
+        return 'MODULE'
+
+    # 2. NAME starts with "chassis"
     if _CHASSIS_NAME_RE.match(name.strip()):
         return 'CHASSIS'
-    combined = (descr + ' ' + pid).upper()
-    # Chassis keyword in DESCR (IOS XR style: "ASR 9006 ... Chassis")
-    if re.search(r'\bCHASSIS\b', combined) and not re.search(r'PEM|POWER|FAN', combined):
+
+    # 3. CHASSIS keyword in DESCR — but NOT if PID is a line card
+    if re.search(r'\bCHASSIS\b', combined) and not re.search(r'\b(PEM|FAN|POWER|PWR)\b', combined):
         return 'CHASSIS'
+
+    # 4. DESCR-based rules
     for pattern, label in _TYPE_RULES:
-        if re.search(pattern.upper(), combined):
+        if re.search(pattern, combined, re.IGNORECASE):
             return label
-    # PID matches known chassis-only PID → CHASSIS
+
+    # 5. Fallback: known chassis PID pattern
     if _CHASSIS_PID_RE.match(pid.strip()):
         return 'CHASSIS'
+
     return 'MODULE'
 
 
