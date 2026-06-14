@@ -9,7 +9,7 @@ from log_parsers import parse_show_inventory
 from archive_utils import extract_logs
 from lookup import classify_network, lookup_site_zone
 from zone_db_manager import render_zone_db_selector
-from report_date_widget import render_report_date, get_active_mapping
+from report_date_widget import render_report_date
 from exporter import export_sheet_bytes
 
 st.set_page_config(page_title="Inventory | NT Report", page_icon="📦", layout="wide")
