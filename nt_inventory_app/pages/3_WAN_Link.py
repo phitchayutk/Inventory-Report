@@ -21,7 +21,7 @@ render_zone_db_selector(location="sidebar")
 st.title("🔗 WAN Link")
 st.caption("Upload ไฟล์ `show cdp neighbors detail` (.zip / .7z)")
 
-with st.container(border=True):
+with st.container():
     wan_file = st.file_uploader("Upload archive (.zip / .7z)", type=['zip','7z'], key="wan_upload")
     if wan_file:
         st.success(f"📁 {wan_file.name}  ({wan_file.size/1024/1024:.1f} MB)")

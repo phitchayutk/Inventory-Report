@@ -84,7 +84,7 @@ def render_zone_db_selector(location: str = "sidebar") -> dict | None:
         container.caption(f"📍 {len(active_mapping):,} entries")
 
     # --- Upload new DB ---
-    with container.expander("➕ Upload Zone DB ใหม่", expanded=False):
+    with container.expander("➕ Upload Zone DB ใหม่", ):
         uploaded = st.file_uploader(
             "เลือก .xlsx",
             type=['xlsx'],
@@ -106,7 +106,7 @@ def render_zone_db_selector(location: str = "sidebar") -> dict | None:
     # --- Delete custom DB ---
     custom_dbs = [n for n in db_names if '(uploaded)' in n]
     if custom_dbs:
-        with container.expander("🗑️ ลบ Zone DB", expanded=False):
+        with container.expander("🗑️ ลบ Zone DB", ):
             to_delete = st.selectbox("เลือก DB ที่จะลบ", custom_dbs, key=f"zone_del_{location}")
             if st.button("ลบ", key=f"zone_del_btn_{location}", type="secondary"):
                 del store[to_delete]

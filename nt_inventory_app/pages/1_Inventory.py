@@ -24,7 +24,7 @@ st.title("📦 Inventory")
 st.caption("Upload ไฟล์ `show inventory` และ `admin show inventory` **รวมในไฟล์เดียวกัน** (.zip / .7z)")
 
 # ── Upload ─────────────────────────────────────────────────────────────────────
-with st.container(border=True):
+with st.container():
     st.markdown("**Archive รวม: show inventory + admin show inventory**")
     st.caption("App จะ auto-detect ประเภทจากเนื้อหาของแต่ละไฟล์โดยอัตโนมัติ")
     inv_file = st.file_uploader(

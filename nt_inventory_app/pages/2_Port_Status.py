@@ -22,7 +22,7 @@ render_zone_db_selector(location="sidebar")
 st.title("🔌 Port Status")
 st.caption("Upload ไฟล์ `show interfaces description` (.zip / .7z)")
 
-with st.container(border=True):
+with st.container():
     ps_file = st.file_uploader("Upload archive (.zip / .7z)", type=['zip','7z'], key="ps_upload")
     if ps_file:
         st.success(f"📁 {ps_file.name}  ({ps_file.size/1024/1024:.1f} MB)")

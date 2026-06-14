@@ -20,7 +20,7 @@ st.title("🖥️ SW Version")
 st.caption("Upload ไฟล์ `show version` ของทุกอุปกรณ์ (.zip / .7z)")
 st.info("ℹ️ SW Version จะถูกนำไป merge กับ Inventory โดยอัตโนมัติ — กรุณา Process หน้านี้ก่อนหน้า Inventory")
 
-with st.container(border=True):
+with st.container():
     ver_file = st.file_uploader("Upload archive (.zip / .7z)", type=['zip','7z'], key="ver_upload")
     if ver_file:
         st.success(f"📁 {ver_file.name}  ({ver_file.size/1024/1024:.1f} MB)")

@@ -50,7 +50,7 @@ for step, desc in [
     ("4️⃣ SW Version",  "Upload ไฟล์ `show version` ของทุกอุปกรณ์"),
     ("5️⃣ Export",      "ตรวจสอบข้อมูล แล้วกด **Export Excel** (ทั้ง report หรือแยก sheet)"),
 ]:
-    with st.container(border=True):
+    with st.container():
         a, b = st.columns([1, 5])
         a.markdown(f"**{step}**")
         b.markdown(desc)
