@@ -1,7 +1,6 @@
 """
-NT Inventory Excel Exporter
-Sheets: NT Overall, Port Status, WAN Link
-Supports per-sheet export (bytes) or full report export.
+NT Inventory Excel Exporter — Full version
+Sheets: NT Overall, Port Status, WAN Link, Pivot, New Device, Off Device
 """
 
 from __future__ import annotations
@@ -29,6 +28,11 @@ SPEED_FILLS = {
     '1G':   PatternFill('solid', fgColor='00B050'),
 }
 
+_RED_HEADER_FILL  = PatternFill('solid', fgColor='C00000')
+_PINK_HEADER_FILL = PatternFill('solid', fgColor='FF0000')
+_PINK_ROW_FILL    = PatternFill('solid', fgColor='FFE0E0')
+_DARKRED_ROW_FILL = PatternFill('solid', fgColor='FFD0D0')
+
 
 def _hdr(cell, value, fill=None):
     cell.value     = value
@@ -38,11 +42,13 @@ def _hdr(cell, value, fill=None):
     cell.border    = BORDER
 
 
-def _data(cell, value, align=LEFT_ALIGN):
+def _data(cell, value, align=LEFT_ALIGN, fill=None):
     cell.value     = value
     cell.font      = DATA_FONT
     cell.alignment = align
     cell.border    = BORDER
+    if fill:
+        cell.fill = fill
 
 
 def _title(ws, value: str, ncols: int):
@@ -54,13 +60,20 @@ def _title(ws, value: str, ncols: int):
     ws.row_dimensions[1].height = 20
 
 
+def _wb_to_bytes(wb: Workbook) -> bytes:
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf.read()
+
+
 # ── NT Overall ────────────────────────────────────────────────────────────────
+
 NT_COLS = [
-    ('Network',        12), ('Hostname',    22), ('IP Address',    18),
-    ('Platform',       12), ('Type',        22), ('ProductID',     28),
-    ('CollectedSN',    20), ('Site Name',   22), ('Zone',          10),
-    ('SW Version',     14), ('EOS',         20), ('LDOS',          20),
-    ('LDOS_Planning',  24),
+    ('Network', 12), ('Hostname', 22), ('IP Address', 18),
+    ('Platform', 12), ('Type', 22), ('ProductID', 28),
+    ('CollectedSN', 20), ('Site Name', 22), ('Zone', 10),
+    ('SW Version', 14), ('EOS', 20), ('LDOS', 20), ('LDOS_Planning', 24),
 ]
 
 
@@ -73,18 +86,13 @@ def write_nt_overall(ws, rows: list[dict], report_date: str):
     for ri, row in enumerate(rows, 3):
         ws.row_dimensions[ri].height = 15
         vals = [
-            row.get('Network',       'MPLS LPE'),
-            row.get('Hostname',      ''),
-            row.get('IP Address',    ''),
-            row.get('Platform',      ''),
-            row.get('Type',          ''),
-            row.get('ProductID',     ''),
-            row.get('CollectedSN',   ''),
-            row.get('Site Name',     ''),
-            row.get('Zone',          ''),
-            row.get('SW Version',    ''),
-            row.get('EOS',           'No Announcement'),
-            row.get('LDOS',          'No Announcement'),
+            row.get('Network', 'MPLS LPE'), row.get('Hostname', ''),
+            row.get('IP Address', ''),       row.get('Platform', ''),
+            row.get('Type', ''),             row.get('ProductID', ''),
+            row.get('CollectedSN', ''),      row.get('Site Name', ''),
+            row.get('Zone', ''),             row.get('SW Version', ''),
+            row.get('EOS', 'No Announcement'),
+            row.get('LDOS', 'No Announcement'),
             row.get('LDOS_Planning', 'No Announcement'),
         ]
         for ci, v in enumerate(vals, 1):
@@ -95,6 +103,7 @@ def write_nt_overall(ws, rows: list[dict], report_date: str):
 
 
 # ── Port Status ───────────────────────────────────────────────────────────────
+
 PS_COLS = [
     ('Zone', 8), ('Network', 12), ('Hostname', 24), ('Site Name', 22),
     ('100G\nDown', 8), ('100G\nUp', 8), ('100G\nAdmin\nDown', 10), ('100G\nTotal', 8),
@@ -124,13 +133,15 @@ def write_port_status(ws, rows: list[dict], report_date: str):
             dn, up, adm = b.get('Down', 0), b.get('Up', 0), b.get('Admin Down', 0)
             vals += [dn, up, adm, dn + up + adm]
         for ci, v in enumerate(vals, 1):
-            _data(ws.cell(row=ri, column=ci), v, align=CTR_ALIGN if ci > 4 else LEFT_ALIGN)
+            _data(ws.cell(row=ri, column=ci), v,
+                  align=CTR_ALIGN if ci > 4 else LEFT_ALIGN)
     ws.freeze_panes = 'A3'
     if rows:
         ws.auto_filter.ref = f'A2:{get_column_letter(len(PS_COLS))}{len(rows)+2}'
 
 
 # ── WAN Link ──────────────────────────────────────────────────────────────────
+
 WAN_COLS = [
     ('Source Hostname', 24), ('Source Interface', 32),
     ('Destination Hostname', 24), ('Destination Interface', 32),
@@ -156,61 +167,11 @@ def write_wan_link(ws, rows: list[dict], report_date: str):
         ws.auto_filter.ref = f'A2:{get_column_letter(len(WAN_COLS))}{len(rows)+2}'
 
 
-# ── Export helpers ─────────────────────────────────────────────────────────────
-
-def _wb_to_bytes(wb: Workbook) -> bytes:
-    buf = io.BytesIO()
-    wb.save(buf)
-    buf.seek(0)
-    return buf.read()
-
-
-def export_sheet_bytes(sheet: str, rows: list[dict], report_date: str) -> bytes:
-    """Export single sheet → bytes for per-page download button."""
-    wb = Workbook()
-    ws = wb.active
-    if sheet == 'NT Overall':
-        ws.title = 'NT Overall'
-        write_nt_overall(ws, rows, report_date)
-    elif sheet == 'Port Status':
-        ws.title = 'Port Status'
-        write_port_status(ws, rows, report_date)
-    elif sheet == 'WAN Link':
-        ws.title = 'WAN Link'
-        write_wan_link(ws, rows, report_date)
-    return _wb_to_bytes(wb)
-
-
-def export_to_bytes(
-    inventory_rows:   list[dict],
-    port_status_rows: list[dict],
-    wan_link_rows:    list[dict],
-    report_date:      str | None = None,
-) -> bytes:
-    """Full report export → bytes."""
-    if not report_date:
-        report_date = datetime.now().strftime('%d-%m-%Y')
-    wb = Workbook()
-
-    ws1 = wb.active
-    ws1.title = 'NT Overall'
-    write_nt_overall(ws1, inventory_rows, report_date)
-
-    ws2 = wb.create_sheet('Port Status')
-    write_port_status(ws2, port_status_rows, report_date)
-
-    ws3 = wb.create_sheet('WAN Link')
-    write_wan_link(ws3, wan_link_rows, report_date)
-
-    return _wb_to_bytes(wb)
-
-
 # ── Pivot ─────────────────────────────────────────────────────────────────────
+
 PIVOT_COLS = [
-    ('Hostname',  24),
-    ('ProductID', 24),
-    ('SiteName',  22),
-    ('Site',      14),
+    ('Hostname', 24), ('ProductID', 24),
+    ('SiteName', 22), ('Site', 14),
 ]
 
 
@@ -222,8 +183,10 @@ def write_pivot(ws, rows: list[dict], report_date: str):
     ws.row_dimensions[2].height = 16
     for ri, row in enumerate(rows, 3):
         ws.row_dimensions[ri].height = 15
-        vals = [row.get('Hostname',''), row.get('ProductID',''),
-                row.get('SiteName',''), row.get('Site','')]
+        vals = [
+            row.get('Hostname', ''), row.get('ProductID', ''),
+            row.get('SiteName', ''), row.get('Site', ''),
+        ]
         for ci, v in enumerate(vals, 1):
             _data(ws.cell(row=ri, column=ci), v)
     ws.freeze_panes = 'A3'
@@ -232,16 +195,11 @@ def write_pivot(ws, rows: list[dict], report_date: str):
 
 
 # ── New Device / Off Device ───────────────────────────────────────────────────
-_RED_HEADER_FILL   = PatternFill('solid', fgColor='C00000')   # เข้ม (Off)
-_PINK_HEADER_FILL  = PatternFill('solid', fgColor='FF0000')   # สด (New)
-_PINK_ROW_FILL     = PatternFill('solid', fgColor='FFE0E0')
-_DARKRED_ROW_FILL  = PatternFill('solid', fgColor='FFD0D0')
 
 NEWOFF_COLS = [
-    ('Network',    12), ('Hostname',  22), ('IP Address', 18),
-    ('Platform',   12), ('Type',      14), ('ProductID',  24),
-    ('CollectedSN',20), ('Site Name', 22), ('Zone',       10),
-    ('SW Version', 14),
+    ('Network', 12), ('Hostname', 22), ('IP Address', 18),
+    ('Platform', 12), ('Type', 14), ('ProductID', 24),
+    ('CollectedSN', 20), ('Site Name', 22), ('Zone', 10), ('SW Version', 14),
 ]
 
 
@@ -254,24 +212,21 @@ def _write_newoff(ws, rows: list[dict], title_text: str,
     ws.row_dimensions[1].height = 20
 
     for ci, (hdr, w) in enumerate(NEWOFF_COLS, 1):
-        cell = ws.cell(row=2, column=ci)
-        _hdr(cell, hdr, fill=header_fill)
+        _hdr(ws.cell(row=2, column=ci), hdr, fill=header_fill)
         ws.column_dimensions[get_column_letter(ci)].width = w
     ws.row_dimensions[2].height = 16
 
     for ri, row in enumerate(rows, 3):
         ws.row_dimensions[ri].height = 15
         vals = [
-            row.get('Network','MPLS LPE'), row.get('Hostname',''),
-            row.get('IP Address',''),      row.get('Platform',''),
-            row.get('Type',''),            row.get('ProductID',''),
-            row.get('CollectedSN',''),     row.get('Site Name',''),
-            row.get('Zone',''),            row.get('SW Version',''),
+            row.get('Network', 'MPLS LPE'), row.get('Hostname', ''),
+            row.get('IP Address', ''),       row.get('Platform', ''),
+            row.get('Type', ''),             row.get('ProductID', ''),
+            row.get('CollectedSN', ''),      row.get('Site Name', ''),
+            row.get('Zone', ''),             row.get('SW Version', ''),
         ]
         for ci, v in enumerate(vals, 1):
-            cell = ws.cell(row=ri, column=ci)
-            _data(cell, v)
-            cell.fill = row_fill
+            _data(ws.cell(row=ri, column=ci), v, fill=row_fill)
 
     ws.freeze_panes = 'A3'
     if rows:
@@ -292,7 +247,27 @@ def write_off_device(ws, rows: list[dict], report_date: str):
                   row_fill=_DARKRED_ROW_FILL)
 
 
-# ── Updated full export ────────────────────────────────────────────────────────
+# ── Per-sheet export (for per-page download buttons) ─────────────────────────
+
+def export_sheet_bytes(sheet: str, rows: list[dict], report_date: str) -> bytes:
+    wb = Workbook()
+    ws = wb.active
+    if sheet == 'NT Overall':
+        ws.title = 'NT Overall'
+        write_nt_overall(ws, rows, report_date)
+    elif sheet == 'Port Status':
+        ws.title = 'Port Status'
+        write_port_status(ws, rows, report_date)
+    elif sheet == 'WAN Link':
+        ws.title = 'WAN Link'
+        write_wan_link(ws, rows, report_date)
+    elif sheet == 'Pivot':
+        ws.title = 'Pivot'
+        write_pivot(ws, rows, report_date)
+    return _wb_to_bytes(wb)
+
+
+# ── Full report export (6 sheets) ─────────────────────────────────────────────
 
 def export_to_bytes_full(
     inventory_rows:   list[dict],
@@ -327,3 +302,14 @@ def export_to_bytes_full(
     write_off_device(ws6, off_device_rows, report_date)
 
     return _wb_to_bytes(wb)
+
+
+# ── Legacy alias ──────────────────────────────────────────────────────────────
+
+def export_to_bytes(inventory_rows, port_status_rows, wan_link_rows,
+                    report_date=None) -> bytes:
+    """Backward-compatible 3-sheet export."""
+    return export_to_bytes_full(
+        inventory_rows, port_status_rows, wan_link_rows,
+        [], [], [], report_date
+    )
