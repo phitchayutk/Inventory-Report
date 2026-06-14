@@ -7,6 +7,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from archive_utils import extract_logs
 from lookup import build_version_map, build_inv_lookup
 from zone_db_manager import render_zone_db_selector
+from report_date_widget import render_report_date
 
 st.set_page_config(page_title="SW Version | NT Report", page_icon="🖥️", layout="wide")
 
@@ -15,6 +16,7 @@ for key, default in [('version_map', {}), ('ver_file_count', 0)]:
         st.session_state[key] = default
 
 render_zone_db_selector(location="sidebar")
+render_report_date()
 
 st.title("🖥️ SW Version")
 st.caption("Upload ไฟล์ `show version` ของทุกอุปกรณ์ (.zip / .7z)")

@@ -8,7 +8,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from parsers import parse_show_inventory
 from archive_utils import extract_logs
 from lookup import classify_network, lookup_site_zone
-from zone_db_manager import render_zone_db_selector, get_active_mapping
+from zone_db_manager import render_zone_db_selector
+from report_date_widget import render_report_date, get_active_mapping
 from exporter import export_sheet_bytes
 
 st.set_page_config(page_title="Inventory | NT Report", page_icon="📦", layout="wide")
@@ -18,6 +19,7 @@ for key, default in [('inventory_rows', []), ('inv_file_count', 0)]:
         st.session_state[key] = default
 
 render_zone_db_selector(location="sidebar")
+render_report_date()
 
 st.title("📦 Inventory")
 st.caption("Upload ไฟล์ `show inventory` และ `admin show inventory` รวมในไฟล์เดียว (.zip / .7z)")
@@ -79,7 +81,8 @@ if st.session_state.inventory_rows:
     col_title, col_export = st.columns([3,1])
     col_title.subheader(f"📊 Preview — {len(rows):,} records")
     with col_export:
-        report_date = datetime.now().strftime('%d-%m-%Y')
+        from report_date_widget import get_report_date
+        _, report_date = get_report_date()
         clean = [{k:v for k,v in r.items() if not k.startswith('_')} for r in rows]
         excel_bytes = export_sheet_bytes('NT Overall', clean, report_date)
         st.download_button("⬇️ Export NT Overall", data=excel_bytes,

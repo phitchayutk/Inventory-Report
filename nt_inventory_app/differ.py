@@ -107,3 +107,107 @@ def compute_pivot(current_rows: list[dict]) -> list[dict]:
             'Site':      _site_prefix(hn),
         })
     return sorted(pivot, key=lambda x: x['Hostname'])
+
+
+# ---------------------------------------------------------------------------
+# Thai date utilities
+# ---------------------------------------------------------------------------
+
+from datetime import date as _date, datetime as _datetime
+
+_THAI_MONTHS = ['', 'มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน',
+                'กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม']
+
+
+def to_thai_date(d: _date) -> str:
+    """Convert date → Thai format: '16 พฤษภาคม 2026'"""
+    return f'{d.day} {_THAI_MONTHS[d.month]} {d.year}'
+
+
+def today_thai() -> str:
+    return to_thai_date(_date.today())
+
+
+# ---------------------------------------------------------------------------
+# EOS / LDOS lookup from previous month NT Overall
+# ---------------------------------------------------------------------------
+
+def build_eos_ldos_map(previous_rows: list[dict]) -> dict[str, dict]:
+    """
+    Build {ProductID: {EOS, LDOS}} from previous month NT Overall rows.
+    Uses first non-empty EOS/LDOS found per ProductID.
+    """
+    mapping: dict[str, dict] = {}
+    for r in previous_rows:
+        pid = str(r.get('ProductID', '')).strip()
+        if not pid or pid in ('N/A', ''):
+            continue
+        if pid in mapping:
+            continue
+        eos  = str(r.get('EOS',  '') or '').strip()
+        ldos = str(r.get('LDOS', '') or '').strip()
+        if eos or ldos:
+            mapping[pid] = {
+                'EOS':  eos  or 'No Announcement',
+                'LDOS': ldos or 'No Announcement',
+            }
+    return mapping
+
+
+# ---------------------------------------------------------------------------
+# LDOS_Planning calculation
+# ---------------------------------------------------------------------------
+
+def _parse_date_flexible(s: str) -> _date | None:
+    """Try multiple date formats."""
+    for fmt in ('%d/%b/%Y', '%Y-%m-%d', '%d-%m-%Y', '%d/%m/%Y', '%m/%d/%Y'):
+        try:
+            return _datetime.strptime(s.strip(), fmt).date()
+        except Exception:
+            continue
+    return None
+
+
+def calc_ldos_planning(ldos_str: str, report_date: _date) -> str:
+    """Calculate 'In X Years Y Months' from LDOS date and report date."""
+    if not ldos_str or ldos_str in ('No Announcement', '', 'N/A', 'n/a'):
+        return 'No Announcement'
+
+    ldos = _parse_date_flexible(ldos_str)
+    if ldos is None:
+        return ldos_str  # Return as-is if unparseable
+
+    if ldos <= report_date:
+        return 'Expired'
+
+    years  = ldos.year  - report_date.year
+    months = ldos.month - report_date.month
+    if months < 0:
+        years  -= 1
+        months += 12
+
+    if years == 0:
+        return f'In {months} Months'
+    if months == 0:
+        return f'In {years} Years'
+    return f'In {years} Years {months} Months'
+
+
+def enrich_eos_ldos(
+    inventory_rows: list[dict],
+    eos_ldos_map:   dict[str, dict],
+    report_date:    _date,
+) -> list[dict]:
+    """
+    Apply EOS/LDOS from map and calculate LDOS_Planning for each inventory row.
+    Modifies rows in-place and returns them.
+    """
+    for r in inventory_rows:
+        pid  = str(r.get('ProductID', '')).strip()
+        info = eos_ldos_map.get(pid, {})
+        eos  = info.get('EOS',  'No Announcement')
+        ldos = info.get('LDOS', 'No Announcement')
+        r['EOS']           = eos
+        r['LDOS']          = ldos
+        r['LDOS_Planning'] = calc_ldos_planning(ldos, report_date)
+    return inventory_rows

@@ -8,7 +8,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from parsers import parse_show_interfaces_desc
 from archive_utils import extract_logs
 from lookup import classify_network, lookup_site_zone, build_inv_lookup
-from zone_db_manager import render_zone_db_selector, get_active_mapping
+from zone_db_manager import render_zone_db_selector
+from report_date_widget import render_report_date, get_active_mapping
 from exporter import export_sheet_bytes
 
 st.set_page_config(page_title="Port Status | NT Report", page_icon="🔌", layout="wide")
@@ -18,6 +19,7 @@ for key, default in [('port_status_rows', []), ('ps_file_count', 0)]:
         st.session_state[key] = default
 
 render_zone_db_selector(location="sidebar")
+render_report_date()
 
 st.title("🔌 Port Status")
 st.caption("Upload ไฟล์ `show interfaces description` (.zip / .7z)")
@@ -77,7 +79,8 @@ if st.session_state.port_status_rows:
     col_title, col_export = st.columns([3,1])
     col_title.subheader(f"📊 Preview — {len(rows):,} devices")
     with col_export:
-        report_date = datetime.now().strftime('%d-%m-%Y')
+        from report_date_widget import get_report_date
+        _, report_date = get_report_date()
         excel_bytes = export_sheet_bytes('Port Status', rows, report_date)
         st.download_button("⬇️ Export Port Status", data=excel_bytes,
             file_name=f"NT_PortStatus_{datetime.now().strftime('%Y%m%d')}.xlsx",

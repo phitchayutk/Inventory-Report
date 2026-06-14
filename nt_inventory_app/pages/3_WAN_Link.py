@@ -8,6 +8,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from parsers import parse_cdp_neighbors
 from archive_utils import extract_logs
 from zone_db_manager import render_zone_db_selector
+from report_date_widget import render_report_date
 from lookup import build_inv_lookup
 from exporter import export_sheet_bytes
 
@@ -18,6 +19,7 @@ for key, default in [('wan_link_rows', []), ('wan_file_count', 0)]:
         st.session_state[key] = default
 
 render_zone_db_selector(location="sidebar")
+render_report_date()
 
 st.title("🔗 WAN Link")
 st.caption("Upload ไฟล์ `show cdp neighbors detail` (.zip / .7z)")
@@ -69,7 +71,8 @@ if st.session_state.wan_link_rows:
     col_title, col_export = st.columns([3,1])
     col_title.subheader(f"📊 Preview — {len(rows):,} links")
     with col_export:
-        report_date = datetime.now().strftime('%d-%m-%Y')
+        from report_date_widget import get_report_date
+        _, report_date = get_report_date()
         excel_bytes = export_sheet_bytes('WAN Link', rows, report_date)
         st.download_button("⬇️ Export WAN Link", data=excel_bytes,
             file_name=f"NT_WANLink_{datetime.now().strftime('%Y%m%d')}.xlsx",
