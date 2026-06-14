@@ -8,8 +8,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from log_parsers import parse_show_interfaces_desc
 from archive_utils import extract_logs
 from lookup import classify_network, lookup_site_zone, build_inv_lookup
-from zone_db_manager import render_zone_db_selector
-from session_manager import render_session_manager, init_session, get_active_mapping
+from zone_db_manager import render_zone_db_selector, get_active_mapping
+from session_manager import render_session_manager, init_session
 from report_date_widget import render_report_date, get_report_date
 from exporter import export_sheet_bytes
 
