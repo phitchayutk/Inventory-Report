@@ -54,22 +54,19 @@ if st.button("🔍 Process WAN Link", type="primary", use_container_width=True):
     st.success(f"✅ **{len(rows):,} links** จาก **{n:,} devices**")
     st.rerun()
 
-# ── Preview + Export ───────────────────────────────────────────────────────────
 if st.session_state.wan_link_rows:
     rows = st.session_state.wan_link_rows
     st.divider()
 
-    col_title, col_export = st.columns([3, 1])
+    col_title, col_export = st.columns([3,1])
     col_title.subheader(f"📊 Preview — {len(rows):,} links")
     with col_export:
         report_date = datetime.now().strftime('%d-%m-%Y')
         excel_bytes = export_sheet_bytes('WAN Link', rows, report_date)
-        st.download_button(
-            "⬇️ Export sheet นี้", data=excel_bytes,
+        st.download_button("⬇️ Export WAN Link", data=excel_bytes,
             file_name=f"NT_WANLink_{datetime.now().strftime('%Y%m%d')}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True,
-        )
+            use_container_width=True)
 
     df = pd.DataFrame(rows)
 
@@ -80,15 +77,16 @@ if st.session_state.wan_link_rows:
         if 'TEN'     in u or u.startswith('TE'): return '10G'
         return '1G/Other'
 
-    m1, m2, m3 = st.columns(3)
+    m1,m2,m3 = st.columns(3)
     m1.metric("Total Links",    f"{len(df):,}")
     m2.metric("Source Devices", f"{df['Source Hostname'].nunique():,}")
     m3.metric("Dest Devices",   f"{df['Destination Hostname'].nunique():,}")
 
     df['Speed'] = df['Source Interface'].apply(speed_label)
-    tab1, tab2 = st.tabs(["📋 All Links", "📊 Speed Breakdown"])
+    tab1,tab2 = st.tabs(["📋 All Links","📊 Speed Breakdown"])
     with tab1:
-        st.dataframe(df[['Source Hostname','Source Interface','Destination Hostname','Destination Interface']].head(200),
+        st.dataframe(df[['Source Hostname','Source Interface',
+                          'Destination Hostname','Destination Interface']].head(200),
                      use_container_width=True, height=380)
     with tab2:
         sc = df['Speed'].value_counts().reset_index(); sc.columns=['Speed','Links']

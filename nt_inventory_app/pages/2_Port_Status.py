@@ -29,8 +29,7 @@ with st.container():
 
 if st.button("🔍 Process Port Status", type="primary", use_container_width=True):
     if not ps_file:
-        st.warning("กรุณา upload ไฟล์ก่อน")
-        st.stop()
+        st.warning("กรุณา upload ไฟล์ก่อน"); st.stop()
     try:
         files = extract_logs(ps_file)
     except Exception as e:
@@ -45,15 +44,11 @@ if st.button("🔍 Process Port Status", type="primary", use_container_width=Tru
         prog.progress((i+1)/max(n,1), text=f"{i+1}/{n}: {fname}")
         try:
             result = parse_show_interfaces_desc(content)
-            hn     = result['hostname']
+            hn = result['hostname']
             site, zone = lookup_site_zone(hn, mapping)
-            rows.append({
-                'Hostname':    hn,
-                'Network':     classify_network(hn),
-                'Site Name':   site,
-                'Zone':        zone,
-                'port_counts': result['port_counts'],
-            })
+            rows.append({'Hostname': hn, 'Network': classify_network(hn),
+                         'Site Name': site, 'Zone': zone,
+                         'port_counts': result['port_counts']})
         except Exception as e:
             errors.append(f"{fname}: {e}")
 
@@ -67,41 +62,37 @@ if st.button("🔍 Process Port Status", type="primary", use_container_width=Tru
     st.success(f"✅ **{len(rows):,} devices** จาก **{n:,} ไฟล์**")
     st.rerun()
 
-# ── Preview + Export ───────────────────────────────────────────────────────────
 if st.session_state.port_status_rows:
     rows = st.session_state.port_status_rows
     st.divider()
 
-    col_title, col_export = st.columns([3, 1])
+    col_title, col_export = st.columns([3,1])
     col_title.subheader(f"📊 Preview — {len(rows):,} devices")
     with col_export:
         report_date = datetime.now().strftime('%d-%m-%Y')
         excel_bytes = export_sheet_bytes('Port Status', rows, report_date)
-        st.download_button(
-            "⬇️ Export sheet นี้", data=excel_bytes,
+        st.download_button("⬇️ Export Port Status", data=excel_bytes,
             file_name=f"NT_PortStatus_{datetime.now().strftime('%Y%m%d')}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True,
-        )
+            use_container_width=True)
 
-    # Flatten
     flat = []
     for r in rows:
         pc = r.get('port_counts', {})
         row = {'Hostname': r['Hostname'], 'Network': r['Network'],
                'Site Name': r['Site Name'], 'Zone': r['Zone']}
         for spd in ['100G','40G','10G','1G']:
-            b = pc.get(spd, {})
-            up, dn, adm = b.get('Up',0), b.get('Down',0), b.get('Admin Down',0)
+            b = pc.get(spd,{})
+            up,dn,adm = b.get('Up',0),b.get('Down',0),b.get('Admin Down',0)
             row[f'{spd} Up']=up; row[f'{spd} Down']=dn
             row[f'{spd} Admin']=adm; row[f'{spd} Total']=up+dn+adm
         flat.append(row)
     df = pd.DataFrame(flat)
 
-    m1, m2, m3, m4 = st.columns(4)
+    m1,m2,m3,m4 = st.columns(4)
     m1.metric("Devices", f"{len(df):,}")
-    total_up  = sum(r['port_counts'].get(s,{}).get('Up',0) for r in rows for s in ['100G','40G','10G','1G'])
-    total_dn  = sum(r['port_counts'].get(s,{}).get('Down',0) for r in rows for s in ['100G','40G','10G','1G'])
+    total_up  = sum(r['port_counts'].get(s,{}).get('Up',0)         for r in rows for s in ['100G','40G','10G','1G'])
+    total_dn  = sum(r['port_counts'].get(s,{}).get('Down',0)       for r in rows for s in ['100G','40G','10G','1G'])
     total_adm = sum(r['port_counts'].get(s,{}).get('Admin Down',0) for r in rows for s in ['100G','40G','10G','1G'])
     m2.metric("Up", f"{total_up:,}")
     m3.metric("Down", f"{total_dn:,}")
