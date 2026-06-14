@@ -7,9 +7,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from log_parsers import parse_cdp_neighbors
 from archive_utils import extract_logs
-from zone_db_manager import render_zone_db_selector
-from report_date_widget import render_report_date
 from lookup import build_inv_lookup
+from zone_db_manager import render_zone_db_selector
+from report_date_widget import render_report_date, get_report_date
 from exporter import export_sheet_bytes
 
 st.set_page_config(page_title="WAN Link | NT Report", page_icon="🔗", layout="wide")
@@ -41,20 +41,19 @@ if st.button("🔍 Process WAN Link", type="primary", use_container_width=True):
     rows, errors = [], []
     n    = len(files)
     prog = st.progress(0, text="กำลัง parse...")
+
     for i, (fname, content) in enumerate(files):
         prog.progress((i+1)/max(n,1), text=f"{i+1}/{n}: {fname}")
         try:
             parsed = parse_cdp_neighbors(content)
-            # Enrich with IP from inventory lookup
             for r in parsed:
                 hn = r.get('Source Hostname', '')
-                info = inv_lkp.get(hn, {})
-                r['Source IP'] = info.get('IP Address', '')
+                r['Source IP'] = inv_lkp.get(hn, {}).get('IP Address', '')
             rows.extend(parsed)
         except Exception as e:
             errors.append(f"{fname}: {e}")
-    prog.empty()
 
+    prog.empty()
     if errors:
         with st.expander(f"⚠️ {len(errors)} ไฟล์ parse ไม่ได้"):
             for e in errors: st.text(e)
@@ -68,10 +67,9 @@ if st.session_state.wan_link_rows:
     rows = st.session_state.wan_link_rows
     st.divider()
 
-    col_title, col_export = st.columns([3,1])
+    col_title, col_export = st.columns([3, 1])
     col_title.subheader(f"📊 Preview — {len(rows):,} links")
     with col_export:
-        from report_date_widget import get_report_date
         _, report_date = get_report_date()
         excel_bytes = export_sheet_bytes('WAN Link', rows, report_date)
         st.download_button("⬇️ Export WAN Link", data=excel_bytes,
@@ -88,21 +86,23 @@ if st.session_state.wan_link_rows:
         if 'TEN'     in u or u.startswith('TE'): return '10G'
         return '1G/Other'
 
-    m1,m2,m3 = st.columns(3)
+    m1, m2, m3 = st.columns(3)
     m1.metric("Total Links",    f"{len(df):,}")
     m2.metric("Source Devices", f"{df['Source Hostname'].nunique():,}")
     m3.metric("Dest Devices",   f"{df['Destination Hostname'].nunique():,}")
 
     df['Speed'] = df['Source Interface'].apply(speed_label)
-    tab1,tab2 = st.tabs(["📋 All Links","📊 Speed Breakdown"])
+    tab1, tab2 = st.tabs(["📋 All Links", "📊 Speed Breakdown"])
     with tab1:
         st.dataframe(df[['Source Hostname','Source Interface',
                           'Destination Hostname','Destination Interface']].head(200),
                      use_container_width=True, height=380)
     with tab2:
-        sc = df['Speed'].value_counts().reset_index(); sc.columns=['Speed','Links']
+        sc = df['Speed'].value_counts().reset_index(); sc.columns = ['Speed','Links']
         st.dataframe(sc, use_container_width=True, height=200)
-    if len(df) > 200: st.caption(f"แสดง 200 จาก {len(df):,} แถว")
+
+    if len(df) > 200:
+        st.caption(f"แสดง 200 จาก {len(df):,} แถว")
 
     if st.button("🗑️ Clear WAN Link", type="secondary"):
         st.session_state.wan_link_rows  = []

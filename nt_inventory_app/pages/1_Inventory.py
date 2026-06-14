@@ -8,8 +8,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from log_parsers import parse_show_inventory
 from archive_utils import extract_logs
 from lookup import classify_network, lookup_site_zone
-from zone_db_manager import render_zone_db_selector
-from report_date_widget import render_report_date
+from zone_db_manager import render_zone_db_selector, get_active_mapping
+from report_date_widget import render_report_date, get_report_date
 from exporter import export_sheet_bytes
 
 st.set_page_config(page_title="Inventory | NT Report", page_icon="📦", layout="wide")
@@ -51,7 +51,7 @@ if st.button("🔍 Process Inventory", type="primary", use_container_width=True)
         try:
             rows = parse_show_inventory(content, is_admin=is_admin, filename=fname)
             for r in rows:
-                hn = r.get('Hostname','')
+                hn = r.get('Hostname', '')
                 site, zone = lookup_site_zone(hn, mapping)
                 r['Network']    = classify_network(hn)
                 r['Site Name']  = site
@@ -78,38 +78,39 @@ if st.session_state.inventory_rows:
     df   = pd.DataFrame(rows)
     st.divider()
 
-    col_title, col_export = st.columns([3,1])
+    col_title, col_export = st.columns([3, 1])
     col_title.subheader(f"📊 Preview — {len(rows):,} records")
     with col_export:
-        from report_date_widget import get_report_date
         _, report_date = get_report_date()
-        clean = [{k:v for k,v in r.items() if not k.startswith('_')} for r in rows]
+        clean = [{k: v for k, v in r.items() if not k.startswith('_')} for r in rows]
         excel_bytes = export_sheet_bytes('NT Overall', clean, report_date)
         st.download_button("⬇️ Export NT Overall", data=excel_bytes,
             file_name=f"NT_Overall_{datetime.now().strftime('%Y%m%d')}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True)
 
-    m1,m2,m3,m4 = st.columns(4)
-    m1.metric("Total Records",  f"{len(df):,}")
-    m2.metric("Unique Devices", f"{df['Hostname'].nunique():,}")
-    m3.metric("show inventory", f"{len(df[~df['_is_admin']]):,}")
-    m4.metric("admin inventory",f"{len(df[df['_is_admin']]):,}")
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Total Records",   f"{len(df):,}")
+    m2.metric("Unique Devices",  f"{df['Hostname'].nunique():,}")
+    m3.metric("show inventory",  f"{len(df[~df['_is_admin']]):,}")
+    m4.metric("admin inventory", f"{len(df[df['_is_admin']]):,}")
 
-    tab1,tab2,tab3 = st.tabs(["📋 By Type","📋 By Platform","📋 By Zone"])
+    tab1, tab2, tab3 = st.tabs(["📋 By Type", "📋 By Platform", "📋 By Zone"])
     with tab1:
-        tc = df['Type'].value_counts().reset_index(); tc.columns=['Type','Count']
+        tc = df['Type'].value_counts().reset_index(); tc.columns = ['Type', 'Count']
         st.dataframe(tc, use_container_width=True, height=220)
     with tab2:
-        pc = df['Platform'].value_counts().reset_index(); pc.columns=['Platform','Count']
+        pc = df['Platform'].value_counts().reset_index(); pc.columns = ['Platform', 'Count']
         st.dataframe(pc, use_container_width=True, height=220)
     with tab3:
-        zc = df['Zone'].value_counts().reset_index(); zc.columns=['Zone','Count']
+        zc = df['Zone'].value_counts().reset_index(); zc.columns = ['Zone', 'Count']
         st.dataframe(zc, use_container_width=True, height=220)
 
-    display_cols = [c for c in ['Hostname','Network','Site Name','Zone','Platform','Type','ProductID','CollectedSN','SW Version'] if c in df.columns]
+    display_cols = [c for c in ['Hostname','Network','Site Name','Zone','Platform',
+                                 'Type','ProductID','CollectedSN','SW Version'] if c in df.columns]
     st.dataframe(df[display_cols].head(200), use_container_width=True, height=350)
-    if len(df) > 200: st.caption(f"แสดง 200 จาก {len(df):,} แถว")
+    if len(df) > 200:
+        st.caption(f"แสดง 200 จาก {len(df):,} แถว")
 
     if st.button("🗑️ Clear ข้อมูล Inventory", type="secondary"):
         st.session_state.inventory_rows = []
