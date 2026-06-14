@@ -1,0 +1,104 @@
+import streamlit as st
+import pandas as pd
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from parsers import parse_cdp_neighbors
+from archive_utils import extract_logs
+
+st.set_page_config(page_title="WAN Link | NT Report", page_icon="🔗", layout="wide")
+
+for key, default in [('wan_link_rows', []), ('wan_file_count', 0)]:
+    if key not in st.session_state:
+        st.session_state[key] = default
+
+st.title("🔗 WAN Link")
+st.caption("Upload ไฟล์ `show cdp neighbors detail` ในรูปแบบ .zip หรือ .7z")
+
+# ── Upload ─────────────────────────────────────────────────────────────────────
+with st.container(border=True):
+    wan_file = st.file_uploader(
+        "Upload archive (.zip / .7z)",
+        type=['zip', '7z'],
+        key="wan_link_upload",
+    )
+    if wan_file:
+        st.success(f"📁 {wan_file.name}  ({wan_file.size/1024/1024:.1f} MB)")
+
+# ── Process ────────────────────────────────────────────────────────────────────
+if st.button("🔍 Process WAN Link", type="primary", use_container_width=True):
+    if not wan_file:
+        st.warning("กรุณา upload ไฟล์ก่อน")
+        st.stop()
+
+    try:
+        files = extract_logs(wan_file)
+    except Exception as e:
+        st.error(f"❌ Extract ล้มเหลว: {e}")
+        st.stop()
+
+    rows = []
+    errors = []
+    n = len(files)
+    prog = st.progress(0, text="กำลัง parse...")
+
+    for i, (fname, content) in enumerate(files):
+        prog.progress((i + 1) / max(n, 1), text=f"{i+1}/{n}: {fname}")
+        try:
+            rows.extend(parse_cdp_neighbors(content))
+        except Exception as e:
+            errors.append(f"{fname}: {e}")
+
+    prog.empty()
+
+    if errors:
+        with st.expander(f"⚠️ {len(errors)} ไฟล์ parse ไม่ได้"):
+            for e in errors: st.text(e)
+
+    st.session_state.wan_link_rows  = rows
+    st.session_state.wan_file_count = n
+    st.success(f"✅ Parse สำเร็จ — **{len(rows):,} links** จาก **{n:,} devices**")
+    st.rerun()
+
+# ── Preview ────────────────────────────────────────────────────────────────────
+if st.session_state.wan_link_rows:
+    rows = st.session_state.wan_link_rows
+    st.divider()
+    st.subheader(f"📊 Preview — {len(rows):,} links")
+
+    df = pd.DataFrame(rows)
+
+    def speed_label(intf: str) -> str:
+        u = intf.upper()
+        if 'HUNDRED' in u or u.startswith('HU'): return '100G'
+        if 'FORTY'   in u or u.startswith('FO'): return '40G'
+        if 'TEN'     in u or u.startswith('TE'): return '10G'
+        return '1G/Other'
+
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Total Links",     f"{len(df):,}")
+    m2.metric("Source Devices",  f"{df['Source Hostname'].nunique():,}")
+    m3.metric("Dest Devices",    f"{df['Destination Hostname'].nunique():,}")
+
+    if 'Source Interface' in df.columns:
+        df['Speed'] = df['Source Interface'].apply(speed_label)
+        tab1, tab2 = st.tabs(["📋 All Links", "📊 Speed Breakdown"])
+        with tab1:
+            st.dataframe(df[['Source Hostname','Source Interface',
+                              'Destination Hostname','Destination Interface']].head(100),
+                         use_container_width=True, height=350)
+        with tab2:
+            sc = df['Speed'].value_counts().reset_index()
+            sc.columns = ['Speed', 'Links']
+            st.dataframe(sc, use_container_width=True, height=200)
+    else:
+        st.dataframe(df.head(100), use_container_width=True, height=350)
+
+    if len(df) > 100:
+        st.caption(f"แสดง 100 จาก {len(df):,} แถว")
+
+    if st.button("🗑️ Clear ข้อมูล WAN Link", type="secondary"):
+        st.session_state.wan_link_rows  = []
+        st.session_state.wan_file_count = 0
+        st.rerun()
