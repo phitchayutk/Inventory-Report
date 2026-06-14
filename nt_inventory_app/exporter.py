@@ -34,6 +34,18 @@ _PINK_ROW_FILL    = PatternFill('solid', fgColor='FFE0E0')
 _DARKRED_ROW_FILL = PatternFill('solid', fgColor='FFD0D0')
 
 
+import re as _re
+
+# Characters Excel/openpyxl cannot handle
+_ILLEGAL_CHARS = _re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]')
+
+def _clean(value):
+    """Strip illegal XML characters that openpyxl cannot write to Excel."""
+    if isinstance(value, str):
+        return _ILLEGAL_CHARS.sub('', value).strip()
+    return value
+
+
 def _hdr(cell, value, fill=None):
     cell.value     = value
     cell.font      = HDR_FONT
@@ -43,7 +55,7 @@ def _hdr(cell, value, fill=None):
 
 
 def _data(cell, value, align=LEFT_ALIGN, fill=None):
-    cell.value     = value
+    cell.value     = _clean(value)
     cell.font      = DATA_FONT
     cell.alignment = align
     cell.border    = BORDER
