@@ -118,6 +118,14 @@ def _classify_type(descr: str, pid: str, name: str = '') -> str:
     # ASR9K RSP = SUPERVISOR
     if re.match(r'^A9K-RSP', pid_u):
         return 'SUPERVISOR'
+    # ME3600X — Fixed Module = SUPERVISOR, chassis NAME="1" handled below
+    # ME-3600X-24FS-M as Fixed Module 0 → SUPERVISOR
+    if re.match(r'^ME-3[0-9]{3}X?-', pid_u) and 'FIXED MODULE' in name_u:
+        return 'SUPERVISOR'
+    # ME-3600X-24FS-M with NAME="1" → CHASSIS (main chassis entry)
+    if re.match(r'^ME-3[0-9]{3}X?-', pid_u) and re.match(r'^\d+$', name.strip()):
+        return 'CHASSIS'
+
     # ASR9900 Power Tray = MODULE (not PWR)
     if re.match(r'^ASR-9900-(DC|AC)-PEM|^A99-PWRTRAY', pid_u):
         return 'MODULE'
@@ -201,9 +209,9 @@ def _classify_platform(pid: str) -> str:
     if re.search(r'^ASR100[0-9]', p):
         return 'ASR1000'
 
-    # ME3600 series
+    # ME3600X series
     if re.search(r'^ME-3[0-9]{3}X?', p):
-        return 'ME3600'
+        return 'ME3600X'
 
     # Catalyst 8000 series (C8300, C8200 etc.)
     if re.search(r'^C8[0-9]{3}', p):
@@ -286,9 +294,15 @@ def parse_show_inventory(text: str, is_admin: bool = False,
         pid   = m.group(3).strip()
         sn    = m.group(4).strip()
 
-        if pid in ('N/A', '', 'MISSING', 'n/a'):
+        if pid in ('N/A', 'MISSING', 'n/a'):
             continue
-        if not _PID_VALID.match(pid):
+        if pid == '':
+            # Empty PID but has SN → keep with 'NoAnnouncement' as ProductID (ME3600X style)
+            if sn and sn not in ('N/A', ''):
+                pid = 'NoAnnouncement'
+            else:
+                continue
+        elif not _PID_VALID.match(pid):
             continue
 
         item_type = _classify_type(descr, pid, name=name)
