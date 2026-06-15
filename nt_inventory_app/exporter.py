@@ -118,12 +118,12 @@ def write_nt_overall(ws, rows: list[dict], report_date: str):
 
 PS_COLS = [
     ('Zone', 8), ('Network', 12), ('Hostname', 24), ('Site Name', 22),
-    ('100G\nDown', 8), ('100G\nUp', 8), ('100G\nAdmin\nDown', 10), ('100G\nTotal', 8),
-    ('10G\nDown',  8), ('10G\nUp',  8), ('10G\nAdmin\nDown',  10), ('10G\nTotal',  8),
-    ('1G\nDown',   8), ('1G\nUp',   8), ('1G\nAdmin\nDown',   10), ('1G\nTotal',   8),
-    ('40G\nDown',  8), ('40G\nUp',  8), ('40G\nAdmin\nDown',  10), ('40G\nTotal',  8),
+    ('1G\nUp',    8), ('1G\nDown',  8), ('1G\nAdmin\nDown', 10), ('1G\nTotal',   8),
+    ('10G\nUp',   8), ('10G\nDown', 8), ('10G\nAdmin\nDown',10), ('10G\nTotal',  8),
+    ('40G\nUp',   8), ('40G\nDown', 8), ('40G\nAdmin\nDown',10), ('40G\nTotal',  8),
+    ('100G\nUp',  8), ('100G\nDown',8), ('100G\nAdmin\nDown',10),('100G\nTotal', 8),
 ]
-_PS_SPEEDS = ['100G', '10G', '1G', '40G']
+_PS_SPEEDS = ['1G', '10G', '40G', '100G']
 
 
 def write_port_status(ws, rows: list[dict], report_date: str):
@@ -143,7 +143,7 @@ def write_port_status(ws, rows: list[dict], report_date: str):
         for spd in _PS_SPEEDS:
             b = pc.get(spd, {})
             dn, up, adm = b.get('Down', 0), b.get('Up', 0), b.get('Admin Down', 0)
-            vals += [dn, up, adm, dn + up + adm]
+            vals += [up, dn, adm, dn + up + adm]
         for ci, v in enumerate(vals, 1):
             _data(ws.cell(row=ri, column=ci), v,
                   align=CTR_ALIGN if ci > 4 else LEFT_ALIGN)
