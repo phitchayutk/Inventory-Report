@@ -44,6 +44,10 @@ ver_hosts = set(ver_map.keys())
 
 all_hosts = inv_hosts | ps_hosts | wan_hosts | ver_hosts
 
+# Build IP lookup from inventory (prefer CHASSIS row)
+from lookup import build_inv_lookup
+inv_lkp = build_inv_lookup(inv_rows)
+
 if not all_hosts:
     st.warning("⚠️ ยังไม่มีข้อมูล — กรุณา process ข้อมูลจากหน้า Inventory, Port Status, WAN Link, และ SW Version ก่อน")
     st.stop()
@@ -71,6 +75,7 @@ for hn in sorted(all_hosts):
     if not in_ver:  missing.append('SW Version')
     records.append({
         'Hostname':    hn,
+        'IP Address':  inv_lkp.get(hn, {}).get('IP Address', ''),
         'Inventory':   '✅' if in_inv  else '❌',
         'Port Status': '✅' if in_ps   else '❌',
         'WAN Link':    '✅' if in_wan  else '❌',
@@ -115,7 +120,7 @@ with col_filter:
         key="completeness_filter",
     )
 
-display_cols = ['Hostname','Inventory','Port Status','WAN Link','SW Version','Missing']
+display_cols = ['Hostname','IP Address','Inventory','Port Status','WAN Link','SW Version','Missing']
 
 if show_opt == "❌ เฉพาะที่ขาด":
     df_show = df_miss[display_cols]
@@ -149,7 +154,7 @@ with col_export:
         ws.merge_cells(f'A1:{get_column_letter(len(display_cols))}1')
         ws.row_dimensions[1].height = 20
 
-        col_widths = [28, 12, 12, 12, 12, 40]
+        col_widths = [28, 18, 12, 12, 12, 12, 40]
         for ci, (col, w) in enumerate(zip(display_cols, col_widths), 1):
             cell = ws.cell(row=2, column=ci, value=col)
             cell.font = HDR_FONT; cell.fill = HDR_FILL

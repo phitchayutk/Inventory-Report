@@ -126,6 +126,18 @@ def _classify_type(descr: str, pid: str, name: str = '') -> str:
     if re.match(r'^ME-3[0-9]{3}X?-', pid_u) and re.match(r'^\d+$', name.strip()):
         return 'CHASSIS'
 
+    # C8300 / Catalyst 8000 — same PID used for multiple components, NAME decides
+    if re.match(r'^C8[0-9]{3}', pid_u):
+        if name_u == 'CHASSIS' or re.match(r'^CHASSIS', name_u):
+            return 'CHASSIS'
+        if re.search(r'\bR\d+\b', name_u) and 'ROUTE PROCESSOR' in descr_u:
+            return 'SUPERVISOR'
+        if re.search(r'FAN', name_u) or re.search(r'FAN', descr_u):
+            return 'FAN'
+        if re.search(r'POWER SUPPLY|PWR', name_u) or re.search(r'POWER SUPPLY', descr_u):
+            return 'PWR'
+        return 'MODULE'
+
     # ASR9900 Power Tray = MODULE (not PWR)
     if re.match(r'^ASR-9900-(DC|AC)-PEM|^A99-PWRTRAY', pid_u):
         return 'MODULE'
