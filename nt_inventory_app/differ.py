@@ -154,6 +154,25 @@ def today_thai() -> str:
     return to_thai_date(_date.today())
 
 
+def _normalise_date_value(val) -> str:
+    """
+    Convert EOS/LDOS value from Excel to string format dd/Mon/YYYY.
+    Handles: datetime objects, date objects, strings, None.
+    """
+    if val is None:
+        return ''
+    # Excel datetime object
+    if isinstance(val, (_datetime,)):
+        return val.strftime('%d/%b/%Y')
+    if isinstance(val, _date):
+        return val.strftime('%d/%b/%Y')
+    s = str(val).strip()
+    if not s or s.lower() in ('no announcement', 'n/a', 'none', '-', ''):
+        return 'No Announcement'
+    # Already correct format like '30/Apr/2028'
+    return s
+
+
 # ---------------------------------------------------------------------------
 # EOS / LDOS lookup from previous month NT Overall
 # ---------------------------------------------------------------------------
@@ -161,17 +180,17 @@ def today_thai() -> str:
 def build_eos_ldos_map(previous_rows: list[dict]) -> dict[str, dict]:
     """
     Build {ProductID: {EOS, LDOS}} from previous month NT Overall rows.
-    Uses first non-empty EOS/LDOS found per ProductID.
+    Handles both string and datetime values from Excel.
     """
     mapping: dict[str, dict] = {}
     for r in previous_rows:
         pid = str(r.get('ProductID', '')).strip()
-        if not pid or pid in ('N/A', ''):
+        if not pid or pid in ('N/A', '', 'NoAnnouncement', 'No Announcement'):
             continue
         if pid in mapping:
             continue
-        eos  = str(r.get('EOS',  '') or '').strip()
-        ldos = str(r.get('LDOS', '') or '').strip()
+        eos  = _normalise_date_value(r.get('EOS'))
+        ldos = _normalise_date_value(r.get('LDOS'))
         if eos or ldos:
             mapping[pid] = {
                 'EOS':  eos  or 'No Announcement',
@@ -184,8 +203,14 @@ def build_eos_ldos_map(previous_rows: list[dict]) -> dict[str, dict]:
 # LDOS_Planning calculation
 # ---------------------------------------------------------------------------
 
-def _parse_date_flexible(s: str) -> _date | None:
-    """Try multiple date formats."""
+def _parse_date_flexible(s) -> _date | None:
+    """Try multiple date formats, including datetime objects."""
+    if isinstance(s, _datetime):
+        return s.date()
+    if isinstance(s, _date):
+        return s
+    if not isinstance(s, str):
+        return None
     for fmt in ('%d/%b/%Y', '%Y-%m-%d', '%d-%m-%Y', '%d/%m/%Y', '%m/%d/%Y'):
         try:
             return _datetime.strptime(s.strip(), fmt).date()
@@ -194,17 +219,17 @@ def _parse_date_flexible(s: str) -> _date | None:
     return None
 
 
-def calc_ldos_planning(ldos_str: str, report_date: _date) -> str:
+def calc_ldos_planning(ldos_str, report_date: _date) -> str:
     """Calculate 'In X Years Y Months' from LDOS date and report date."""
-    if not ldos_str or ldos_str in ('No Announcement', '', 'N/A', 'n/a'):
+    if not ldos_str or str(ldos_str).strip() in ('No Announcement', '', 'N/A', 'n/a'):
         return 'No Announcement'
 
     ldos = _parse_date_flexible(ldos_str)
     if ldos is None:
-        return ldos_str  # Return as-is if unparseable
+        return str(ldos_str)
 
     if ldos <= report_date:
-        return 'Expired'
+        return 'Already LDOS'
 
     years  = ldos.year  - report_date.year
     months = ldos.month - report_date.month

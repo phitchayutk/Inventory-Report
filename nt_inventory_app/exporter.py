@@ -205,6 +205,63 @@ def write_pivot(ws, rows: list[dict], report_date: str):
     if rows:
         ws.auto_filter.ref = f'A2:{get_column_letter(len(PIVOT_COLS))}{len(rows)+2}'
 
+    # ── Pivot summary table (col F onwards) ──────────────────────────────────
+    # Build: Site → {ProductID → count}
+    from collections import defaultdict
+    site_pid: dict = defaultdict(lambda: defaultdict(int))
+    for r in rows:
+        site = r.get('Site', '')
+        pid  = r.get('ProductID', '')
+        if site and pid:
+            site_pid[site][pid] += 1
+
+    if not site_pid:
+        return
+
+    # Header
+    START_COL = len(PIVOT_COLS) + 2  # col F (skip 1 blank col)
+    _BLUE_FILL  = PatternFill('solid', fgColor='4472C4')
+    _LBLUE_FILL = PatternFill('solid', fgColor='BDD7EE')
+    _THIN = Side(style='thin')
+    _BDR  = Border(left=_THIN, right=_THIN, top=_THIN, bottom=_THIN)
+
+    hdr_cell = ws.cell(row=2, column=START_COL, value='Row Labels')
+    hdr_cell.font = HDR_FONT; hdr_cell.fill = _BLUE_FILL
+    hdr_cell.alignment = WRAP_ALIGN; hdr_cell.border = _BDR
+    ws.column_dimensions[get_column_letter(START_COL)].width = 28
+
+    cnt_cell = ws.cell(row=2, column=START_COL + 1, value='Count of Site')
+    cnt_cell.font = HDR_FONT; cnt_cell.fill = _BLUE_FILL
+    cnt_cell.alignment = WRAP_ALIGN; cnt_cell.border = _BDR
+    ws.column_dimensions[get_column_letter(START_COL + 1)].width = 14
+
+    _SITE_FONT = Font(name=FONT_NAME, bold=True, size=10)
+    _PID_FONT  = Font(name=FONT_NAME, size=10)
+
+    ri = 3
+    for site in sorted(site_pid.keys()):
+        pids   = site_pid[site]
+        total  = sum(pids.values())
+
+        # Site row (bold, light blue)
+        sc = ws.cell(row=ri, column=START_COL, value=f'⊟ {site}')
+        sc.font = _SITE_FONT; sc.fill = _LBLUE_FILL; sc.border = _BDR
+        sc.alignment = LEFT_ALIGN
+        tc = ws.cell(row=ri, column=START_COL + 1, value=total)
+        tc.font = _SITE_FONT; tc.fill = _LBLUE_FILL; tc.border = _BDR
+        tc.alignment = CTR_ALIGN
+        ws.row_dimensions[ri].height = 15
+        ri += 1
+
+        # ProductID rows
+        for pid in sorted(pids.keys()):
+            pc = ws.cell(row=ri, column=START_COL, value=f'    {pid}')
+            pc.font = _PID_FONT; pc.border = _BDR; pc.alignment = LEFT_ALIGN
+            kc = ws.cell(row=ri, column=START_COL + 1, value=pids[pid])
+            kc.font = _PID_FONT; kc.border = _BDR; kc.alignment = CTR_ALIGN
+            ws.row_dimensions[ri].height = 15
+            ri += 1
+
 
 # ── New Device / Off Device ───────────────────────────────────────────────────
 
