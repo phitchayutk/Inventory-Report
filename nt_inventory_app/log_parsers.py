@@ -167,15 +167,14 @@ def _classify_type(descr: str, pid: str, name: str = '') -> str:
     if re.search(r'^NCS-5[0-9]+-(?:LC|SC|FN)', pid_u):
         return 'MODULE'
 
-    # 2. NCS fixed-chassis (NCS-5501, NCS-5002 etc.) — NAME determines type
-    #    NAME: "Rack 0"   → CHASSIS
-    #    NAME: "0/RP0"    → SUPERVISOR
-    if re.match(r'^NCS-5[05][0-9][0-9]', pid_u):
+    # 2. NCS/N540/N560 fixed-chassis — NAME determines CHASSIS vs SUPERVISOR
+    #    NAME: "Rack 0"       → CHASSIS
+    #    NAME: "0/RP0/CPU0"   → SUPERVISOR
+    if re.match(r'^NCS-5[05][0-9][0-9]', pid_u) or re.match(r'^N5[46]0-', pid_u):
         if re.match(r'^RACK\s*\d', name_u):
             return 'CHASSIS'
-        if re.search(r'/RP\d', name_u) or 'ROUTE PROCESSOR' in descr_u:
+        if re.search(r'(/RP\d|/RSP\d)', name_u) or 'ROUTE PROCESSOR' in descr_u:
             return 'SUPERVISOR'
-        # fallback for NCS-5501 with no clear name
         return 'CHASSIS'
 
     # 3. NAME starts with "chassis" → CHASSIS
@@ -318,6 +317,11 @@ def parse_show_inventory(text: str, is_admin: bool = False,
             continue
 
         item_type = _classify_type(descr, pid, name=name)
+
+        # Skip FAN/PWR rows with no valid SN (N/A or empty)
+        if item_type in ('FAN', 'PWR') and sn in ('N/A', 'n/a', ''):
+            continue
+
         records.append({
             'Hostname':    hostname,
             'IP Address':  ip_addr,
